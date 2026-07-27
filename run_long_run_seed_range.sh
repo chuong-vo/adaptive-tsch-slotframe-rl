@@ -1,12 +1,12 @@
 #!/bin/bash
-# Chạy long_run tuần tự cho dải seed.
+# Run long-run evaluation sequentially for a seed range.
 #
 # Usage:
-#   ./run_long_run_seed_range.sh                  # mặc định từ 43 tới 50
-#   ./run_long_run_seed_range.sh 10 20            # hoặc chỉ định START END
-#   ./run_long_run_seed_range.sh 10 20 MODEL.zip  # chỉ định model mới
+#   ./run_long_run_seed_range.sh                  # defaults to seeds 43-50
+#   ./run_long_run_seed_range.sh 10 20            # custom START and END
+#   ./run_long_run_seed_range.sh 10 20 MODEL.zip  # custom PPO model
 #
-# Script này chỉ là wrapper, gọi lại ./run_long_run_with_seed.sh
+# This wrapper invokes run_long_run_with_seed.sh one seed at a time.
 
 set -euo pipefail
 
@@ -15,7 +15,7 @@ END_SEED=${2:-50}
 MODEL_PATH=${3:-${ELISE_TRAINED_MODEL:-}}
 
 if ! command -v seq >/dev/null 2>&1; then
-  echo "Error: lệnh 'seq' không có sẵn trên hệ thống." >&2
+  echo "Error: the 'seq' command is not available." >&2
   exit 1
 fi
 

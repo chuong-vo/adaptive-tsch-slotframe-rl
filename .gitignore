@@ -28,6 +28,7 @@ target/
 /runs/
 /artifacts/
 /smoke/
+/.cooja_controller.lock
 
 # Cooja runtime files
 COOJA.log

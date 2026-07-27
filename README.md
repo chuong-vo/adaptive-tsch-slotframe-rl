@@ -34,6 +34,18 @@ The experimental workflow has three stages:
 
 Intermediate logs, unselected checkpoints, caches, virtual environments, and
 thesis/report files are intentionally excluded.
+Required Contiki-NG and Cooja dependency sources are vendored as regular files;
+no `git submodule update` step is required.
+
+## Workflow Index
+
+1. [Install system dependencies](#2-install-system-dependencies)
+2. [Create the Python environment](#3-create-the-python-environment)
+3. [Validate the source](#4-validate-the-source-before-running)
+4. [Run smoke tests](#5-smoke-tests)
+5. [Collect and fit trend data](#6-stage-1-collect-trend-data)
+6. [Train PPO](#8-stage-2-train-the-ppo-policy)
+7. [Run and analyze long-run evaluation](#9-stage-3-long-run-evaluation)
 
 ## Tested Environment
 
@@ -48,7 +60,9 @@ The final experiments were executed with:
 - NVIDIA CUDA 12.8 for PPO training
 
 A GPU is optional. Trend collection and long-run evaluation are dominated by
-Cooja simulation and run correctly on a CPU-only machine.
+Cooja simulation and run correctly on a CPU-only machine. For exact
+reproduction, use Python 3.10 and the pinned direct dependencies in
+`requirements-rl.txt`.
 
 Recommended resources:
 
@@ -89,7 +103,12 @@ sudo apt install -y \
   python3-dev \
   python3-venv \
   openjdk-17-jdk \
-  psmisc
+  iproute2 \
+  procps \
+  psmisc \
+  util-linux \
+  mosquitto \
+  mosquitto-clients
 ```
 
 Verify the installations:
@@ -97,10 +116,35 @@ Verify the installations:
 ```bash
 python3 --version
 java -version
+mosquitto -h | head -n 1
 ```
 
-Python 3.10 or later is required. Python 3.10 is recommended when exact
-reproduction of the final run is needed.
+Start the local MQTT broker required by long-run profile switching:
+
+```bash
+sudo systemctl enable --now mosquitto
+```
+
+On a WSL installation without systemd:
+
+```bash
+sudo service mosquitto start
+```
+
+Verify that the broker is listening:
+
+```bash
+ss -ltn | grep ':1883'
+```
+
+Python 3.10 is the supported reproduction version. Newer Python releases may
+work, but they were not used for the final experiment.
+If `python3` does not point to Python 3.10, select it explicitly when running
+the setup script:
+
+```bash
+RL_PYTHON=python3.10 ./setup_rl_env.sh .venv-rl auto
+```
 
 ## 3. Create the Python Environment
 
@@ -118,7 +162,8 @@ source .venv-rl/bin/activate
 ```
 
 `auto` selects the CUDA 12.8 PyTorch build when `nvidia-smi` is available.
-Otherwise, it installs the CPU build.
+Otherwise, it installs the CPU build. Detection does not validate the NVIDIA
+driver version. Use the explicit `cpu` option if CUDA initialization fails.
 
 ### CPU-only installation
 
@@ -154,13 +199,15 @@ pip check
 ### Slotframe-control unit tests
 
 ```bash
-pytest -q SDWSN-controller/tests/test_env_slotframe_controls.py
+pytest -q \
+  SDWSN-controller/tests/test_env_slotframe_controls.py \
+  SDWSN-controller/tests/test_trend_sweep_completion.py
 ```
 
 Expected result:
 
 ```text
-..... [100%]
+........... [100%]
 ```
 
 ### Cooja/Gradle validation
@@ -171,16 +218,20 @@ cd contiki-ng/tools/cooja
 cd ../../..
 ```
 
-The expected result is `BUILD SUCCESSFUL`. Cooja builds the simulated mote
-target. Do not run `make TARGET=cooja` directly in the mote application
-directory.
+The expected result is `BUILD SUCCESSFUL`. This validates the Cooja Java/Gradle
+project; it does not compile or execute the experiment mote. The trend and
+long-run smoke tests perform the complete Cooja startup and mote compilation
+path. Do not run `make TARGET=cooja` directly in the mote application directory.
 
 ### Controller port
 
 Cooja and the controller communicate through TCP port `60001` by default.
+Long-run profile switching additionally requires the MQTT broker on port
+`1883`.
 
 ```bash
 ss -ltnp | grep ':60001' || true
+ss -ltnp | grep ':1883'
 ```
 
 If an old Cooja process is holding the port:
@@ -298,8 +349,10 @@ least:
 ### Resume behavior
 
 Checkpointing is performed at seed granularity. Re-running the same command
-skips seeds that already contain all required outputs. An interrupted or invalid
-seed is executed again.
+skips a seed only after parsing its coverage summary and trend vectors,
+confirming the requested row count, slotframe coverage, metric coefficients, and
+fixed profile. Missing, malformed, interrupted, or insufficient output is
+executed again.
 
 Count completed seeds:
 
@@ -343,6 +396,7 @@ python SDWSN-controller/tutorials/reinforcement-learning/plot_seed_trends.py \
   --config "$TRAIN_CONFIG" \
   --min-valid-rows 1000 \
   --min-slotframes 30 \
+  --min-seeds 20 \
   --required-profile balanced \
   --write-config
 ```
@@ -449,11 +503,29 @@ output/*.png
 Proceed to long-run evaluation only after `policy_grid_evaluation.csv` contains
 all 20 grid cases and every case has `direction_ok=True`.
 
+Check this condition directly:
+
+```bash
+python - "$MODEL" <<'PY'
+import csv
+import sys
+from pathlib import Path
+
+model = Path(sys.argv[1]).resolve()
+grid = model.parents[1] / "metrics" / "policy_grid_evaluation.csv"
+with grid.open(newline="", encoding="utf-8") as stream:
+    rows = list(csv.DictReader(stream))
+passed = sum(row["direction_ok"].lower() == "true" for row in rows)
+print(f"policy grid: {passed}/{len(rows)}")
+raise SystemExit(0 if len(rows) == 20 and passed == 20 else 1)
+PY
+```
+
 ## 9. Stage 3: Long-Run Evaluation
 
 Long-run seeds must execute sequentially because Cooja uses a single controller
-port. Each seed contains 1,200 cycles divided into four 300-cycle profile
-periods:
+port. The trend and long-run wrappers enforce this with a shared file lock. Each
+seed contains 1,200 cycles divided into four 300-cycle profile periods:
 
 | Profile | Weights `(alpha, beta, delta)` | Priority |
 |---|---:|---|
@@ -461,6 +533,13 @@ periods:
 | delay | `(0.1, 0.8, 0.1)` | End-to-end delay |
 | energy | `(0.8, 0.1, 0.1)` | Power/energy consumption |
 | reliability | `(0.1, 0.1, 0.8)` | Reliability/PDR |
+
+Before starting, verify that Mosquitto is active and port `60001` is free:
+
+```bash
+ss -ltn | grep ':1883'
+ss -ltn | grep ':60001' && echo "ERROR: port 60001 is busy" || true
+```
 
 Run seeds 43 through 50:
 
@@ -471,6 +550,7 @@ LONG_LOG="$PWD/SDWSN-controller/tutorials/reinforcement-learning/long-run/logs/f
 
 ELISE_OUTPUT_BASE="$LONG_OUT" \
 ELISE_LOG_BASE="$LONG_LOG" \
+ELISE_PROFILE_SWITCH_SOURCE=applayer \
 ELISE_MAX_CYCLES=1200 \
 ./run_long_run_seed_range.sh 43 50 "$MODEL"
 ```
@@ -485,12 +565,18 @@ done
 ```
 
 Each completed seed must contain 1,200 data rows. Long-run evaluation does not
-checkpoint within a seed. If a power failure or crash interrupts one seed,
-restart that seed from the beginning:
+checkpoint within a seed. Before a seed starts, the wrapper moves any non-empty
+output and log directories for that seed to
+`<directory>.previous_<UTC timestamp>`. This prevents an interrupted new run
+from being mistaken for an older completed run.
+
+If a power failure or crash interrupts one seed, restart that seed from the
+beginning:
 
 ```bash
 ELISE_OUTPUT_BASE="$LONG_OUT" \
 ELISE_LOG_BASE="$LONG_LOG" \
+ELISE_PROFILE_SWITCH_SOURCE=applayer \
 ELISE_MAX_CYCLES=1200 \
 ./run_long_run_with_seed.sh 47 "$MODEL"
 ```
@@ -526,7 +612,21 @@ wait_timeouts = 0
 all_runs_complete = true
 ```
 
-## 11. Committed Final Artifacts
+## 11. Observed Runtime
+
+Runtime depends on CPU performance, Cooja stalls, storage, and GPU availability.
+On the machine used for the final experiment:
+
+| Stage | Observed elapsed time |
+|---|---:|
+| Trend collection, 20 sequential seeds | approximately 52 hours |
+| PPO training, CUDA 12.8 | approximately 4 hours |
+| Long-run evaluation, 8 sequential seeds | approximately 18 hours |
+
+These values are planning references, not execution time limits. The scientific
+stopping conditions remain the configured cycle or training-step counts.
+
+## 12. Committed Final Artifacts
 
 The final results can be inspected without re-running the experiments:
 
@@ -553,7 +653,7 @@ print("model: OK")
 PY
 ```
 
-## 12. Main Data Fields
+## 13. Main Data Fields
 
 The primary CSV files are the trend and long-run `example.csv` files and the
 training `eval_metrics.csv` file.
@@ -582,7 +682,7 @@ training `eval_metrics.csv` file.
 `delay_mean` is the network-wide mean for one cycle, not a list of per-packet
 delays.
 
-## 13. Stall and Retry Semantics
+## 14. Stall and Retry Semantics
 
 - The controller allows up to 30 seconds for one processing window.
 - If the window stalls, the same pending configuration and action are retried up
@@ -596,7 +696,7 @@ delays.
 Do not reduce the timeout or disable retries merely to shorten execution time.
 Doing so can change the resulting dataset.
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 ### Stuck at `Waiting for Cooja to start`
 
@@ -605,6 +705,13 @@ Doing so can change the resulting dataset.
 3. Stop stale Cooja processes using the commands in Section 4.
 4. Run `./gradlew test` in `contiki-ng/tools/cooja`.
 5. Inspect the log directory configured through `ELISE_LOG_BASE`.
+
+### MQTT broker is not listening
+
+```bash
+sudo systemctl restart mosquitto 2>/dev/null || sudo service mosquitto restart
+ss -ltn | grep ':1883'
+```
 
 ### `ModuleNotFoundError`
 
@@ -645,7 +752,7 @@ sudo chown -R "$USER:$USER" \
 - Long-run evaluation: preserve completed seeds and restart the interrupted seed
   from its beginning.
 
-## 15. Reproducibility Guidelines
+## 16. Reproducibility Guidelines
 
 - Create a new output directory for every experiment.
 - Treat `results/` as the final reference baseline and do not overwrite it.
@@ -656,9 +763,10 @@ sudo chown -R "$USER:$USER" \
 - Do not commit virtual environments, Cooja logs, intermediate checkpoints, or
   personal reports.
 
-## 16. Upstream Source and Licenses
+## 17. Upstream Source and Licenses
 
 The control plane inherits components from SDWSN-controller/ELISE by Fernando
 Jurado-Lasso. The data plane inherits Contiki-NG and its bundled dependencies.
-Review the license and copyright notices in each source directory before
-redistributing the project.
+See `LICENSES.md`, `SDWSN-controller/LICENSE`, `contiki-ng/LICENSE.md`, and the
+license notices bundled with third-party components before redistributing the
+project.

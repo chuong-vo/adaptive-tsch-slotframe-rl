@@ -1,11 +1,10 @@
 #!/bin/bash
 set -euo pipefail
-# Script để chạy long_run với seed khác nhau
 
 # Usage: ./run_long_run_with_seed.sh [SEED] [MODEL_PATH]
 # Example: ./run_long_run_with_seed.sh 999999 /path/to/best_model.zip
 
-SEED=${1:-123456}  # Default = 123456, hoặc lấy từ argument $1
+SEED=${1:-123456}
 MODEL_PATH=${2:-${ELISE_TRAINED_MODEL:-}}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,6 +15,7 @@ CONTIKI_NG="${CONTIKI_NG:-${SCRIPT_DIR}/contiki-ng}"
 PROFILE_ORDER="${ELISE_PROFILE_ORDER:-balanced,delay,energy,pdr}"
 INITIAL_PROFILE="${ELISE_INITIAL_PROFILE:-balanced}"
 PROFILE_SWITCH_MODE="${ELISE_PROFILE_SWITCH_MODE:-roundrobin}"
+PROFILE_SWITCH_SOURCE="${ELISE_PROFILE_SWITCH_SOURCE:-applayer}"
 PROFILE_SWITCH_EVERY="${ELISE_PROFILE_SWITCH_EVERY:-300}"
 MAX_CYCLES="${ELISE_MAX_CYCLES:-1200}"
 MAX_WAIT_RETRIES="${ELISE_MAX_WAIT_RETRIES:-3}"
@@ -43,12 +43,66 @@ OUTPUT_BASE="${ELISE_OUTPUT_BASE:-SDWSN-controller/tutorials/reinforcement-learn
 LOG_BASE="${ELISE_LOG_BASE:-SDWSN-controller/tutorials/reinforcement-learning/long-run/logs}"
 OUTPUT_DIR="${ELISE_OUTPUT_DIR:-${OUTPUT_BASE}/seed_${SEED}}"
 LOG_DIR="${ELISE_LOG_DIR:-${LOG_BASE}/seed_${SEED}}"
+LOCK_FILE="${SCRIPT_DIR}/.cooja_controller.lock"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "Error: another trend or long-run Cooja experiment is active." >&2
+  exit 2
+fi
+
+if [ -z "$MODEL_PATH" ] || [ ! -f "$MODEL_PATH" ]; then
+  echo "Error: a valid PPO model path is required." >&2
+  echo "Usage: $0 SEED /absolute/path/to/best_model.zip" >&2
+  exit 2
+fi
+
+if [ "$PROFILE_SWITCH_SOURCE" != "applayer" ]; then
+  echo "Error: ELISE_PROFILE_SWITCH_SOURCE must be 'applayer' for long-run." >&2
+  exit 2
+fi
+
+if [ ! -f "$COOJA_FILE" ]; then
+  echo "Error: Cooja simulation file not found: $COOJA_FILE" >&2
+  exit 2
+fi
+
+if ! timeout 2 bash -c "</dev/tcp/127.0.0.1/1883" 2>/dev/null; then
+  echo "Error: MQTT broker is not listening on localhost:1883." >&2
+  echo "Start Mosquitto before running long-run evaluation." >&2
+  exit 2
+fi
+
+if timeout 1 bash -c "</dev/tcp/127.0.0.1/60001" 2>/dev/null; then
+  echo "Error: controller port 60001 is already in use." >&2
+  exit 2
+fi
 
 echo "=========================================="
 echo "Running long_run with seed: $SEED"
 echo "=========================================="
 
-# Backup file gốc
+# Preserve previous run data instead of silently mixing or overwriting it.
+RUN_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+archive_nonempty_directory() {
+  local directory="$1"
+  if [ -d "$directory" ] && \
+      [ -n "$(find "$directory" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+    local archive="${directory}.previous_${RUN_TIMESTAMP}"
+    local suffix=1
+    while [ -e "$archive" ]; do
+      archive="${directory}.previous_${RUN_TIMESTAMP}_${suffix}"
+      suffix=$((suffix + 1))
+    done
+    mv -- "$directory" "$archive"
+    echo "Archived existing directory: $archive"
+  fi
+}
+
+archive_nonempty_directory "$OUTPUT_DIR"
+archive_nonempty_directory "$LOG_DIR"
+
+# Back up the simulation configuration and always restore it on exit.
 cp "$COOJA_FILE" "$BACKUP_FILE"
 restore_cooja_file() {
   if [ -f "$BACKUP_FILE" ]; then
@@ -58,23 +112,20 @@ restore_cooja_file() {
 }
 trap restore_cooja_file EXIT
 
-# Set seed trong cooja-elise.csc
+# Set the Cooja random seed.
 sed -i "s/<randomseed>[0-9]*<\/randomseed>/<randomseed>${SEED}<\/randomseed>/" \
     "$COOJA_FILE"
 
-# Tạo output directory
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$LOG_DIR"
 
-# Chạy long_run
-if [ -n "$MODEL_PATH" ]; then
-  export ELISE_TRAINED_MODEL="$MODEL_PATH"
-fi
+export ELISE_TRAINED_MODEL="$MODEL_PATH"
 
 CONTIKI_NG="$CONTIKI_NG" \
 PYTHONPATH="$PYTHONPATH_VALUE" \
 ELISE_COOJA_SEED="$SEED" \
 ELISE_INITIAL_PROFILE="$INITIAL_PROFILE" \
+ELISE_PROFILE_SWITCH_SOURCE="$PROFILE_SWITCH_SOURCE" \
 ELISE_PROFILE_SWITCH_MODE="$PROFILE_SWITCH_MODE" \
 ELISE_PROFILE_SWITCH_EVERY="$PROFILE_SWITCH_EVERY" \
 ELISE_PROFILE_ORDER="$PROFILE_ORDER" \

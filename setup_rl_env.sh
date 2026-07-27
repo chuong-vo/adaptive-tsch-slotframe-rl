@@ -5,9 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${1:-${SCRIPT_DIR}/.venv-rl}"
 TORCH_VARIANT="${2:-${RL_TORCH_VARIANT:-auto}}"
 CONTROLLER_ROOT="${SCRIPT_DIR}/SDWSN-controller"
+REQUIREMENTS_FILE="${SCRIPT_DIR}/requirements-rl.txt"
+BOOTSTRAP_PYTHON="${RL_PYTHON:-python3}"
+
+if [ ! -f "$REQUIREMENTS_FILE" ]; then
+  echo "Error: dependency file not found: ${REQUIREMENTS_FILE}" >&2
+  exit 2
+fi
+
+PYTHON_VERSION="$("$BOOTSTRAP_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [ "$PYTHON_VERSION" != "3.10" ]; then
+  echo "Warning: Python ${PYTHON_VERSION} is untested; Python 3.10 is recommended." >&2
+fi
 
 echo "Creating RL virtual environment at: ${VENV_DIR}"
-python3 -m venv "${VENV_DIR}"
+"$BOOTSTRAP_PYTHON" -m venv "${VENV_DIR}"
 
 PYTHON_BIN="${VENV_DIR}/bin/python"
 PIP_BIN="${VENV_DIR}/bin/pip"
@@ -42,20 +54,9 @@ echo "Installing PyTorch variant: ${TORCH_VARIANT}"
   --index-url "$TORCH_INDEX_URL" \
   torch==2.8.0
 
-# Project runtime dependencies. TensorFlow is intentionally excluded: the RL
-# workflow here uses PyTorch/SB3/TensorBoard only.
-"${PIP_BIN}" install \
-  stable-baselines3[extra]==2.0.0a5 \
-  docker \
-  networkx \
-  pandas \
-  pyserial \
-  paho-mqtt \
-  pyfiglet \
-  python-daemon \
-  pytest \
-  rich \
-  tomli
+# TensorFlow is intentionally excluded: this workflow uses PyTorch, SB3, and
+# TensorBoard. Direct dependencies are pinned to the final tested environment.
+"${PIP_BIN}" install -r "${REQUIREMENTS_FILE}"
 
 "${PIP_BIN}" install -e "${CONTROLLER_ROOT}"
 

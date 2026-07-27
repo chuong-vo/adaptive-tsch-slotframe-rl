@@ -11,6 +11,9 @@ specific output directory so the results remain separated.
 from __future__ import annotations
 
 import argparse
+import fcntl
+import json
+import math
 import os
 import re
 import subprocess
@@ -69,9 +72,72 @@ def _run_command(seed: int, cmd_env: dict, output_dir: Path, log_dir: Path) -> N
     print(f"[seed={seed}] Finished")
 
 
-def _seed_is_complete(output_dir: Path) -> bool:
+def _seed_completion_issue(
+    output_dir: Path,
+    min_valid_rows: int,
+    min_slotframes: int,
+    required_profile: str,
+) -> str | None:
     required = ("example.csv", "coverage_summary.json", "trend_vectors.json")
-    return all((output_dir / name).is_file() for name in required)
+    missing = [name for name in required if not (output_dir / name).is_file()]
+    if missing:
+        return f"missing files: {', '.join(missing)}"
+
+    try:
+        with (output_dir / "coverage_summary.json").open(encoding="utf-8") as stream:
+            coverage = json.load(stream)
+        with (output_dir / "trend_vectors.json").open(encoding="utf-8") as stream:
+            trends = json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"unreadable JSON: {exc}"
+
+    if not isinstance(coverage, dict):
+        return "coverage_summary.json must contain an object"
+    if not isinstance(trends, dict):
+        return "trend_vectors.json must contain an object"
+
+    try:
+        valid_rows = int(coverage.get("valid_rows", 0) or 0)
+    except (TypeError, ValueError):
+        return "valid_rows is not an integer"
+    if valid_rows < min_valid_rows:
+        return f"valid_rows={valid_rows} < {min_valid_rows}"
+
+    slotframes = coverage.get("slotframe_counts", {}) or {}
+    if not isinstance(slotframes, dict) or len(slotframes) < min_slotframes:
+        count = len(slotframes) if isinstance(slotframes, dict) else 0
+        return f"slotframes={count} < {min_slotframes}"
+
+    if required_profile:
+        profile_counts = coverage.get("profile_counts", {}) or {}
+        if not isinstance(profile_counts, dict):
+            return "profile_counts must contain an object"
+        try:
+            nonzero_profiles = {
+                str(name): int(count)
+                for name, count in profile_counts.items()
+                if int(count or 0) > 0
+            }
+        except (TypeError, ValueError):
+            return "profile_counts contains a non-integer count"
+        expected = {required_profile: valid_rows}
+        if nonzero_profiles != expected:
+            return f"profile_counts={nonzero_profiles}, expected {expected}"
+
+    for metric in ("power", "delay", "reliability"):
+        metric_data = trends.get(metric)
+        if not isinstance(metric_data, dict):
+            return f"missing trend metric: {metric}"
+        coefficients = metric_data.get("coefficients")
+        if not isinstance(coefficients, list) or not coefficients:
+            return f"missing coefficients for trend metric: {metric}"
+        try:
+            if not all(math.isfinite(float(value)) for value in coefficients):
+                return f"non-finite coefficients for trend metric: {metric}"
+        except (TypeError, ValueError):
+            return f"non-numeric coefficients for trend metric: {metric}"
+
+    return None
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -182,6 +248,19 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     output_base = Path(args.output_base).resolve()
     log_base = Path(args.log_base).resolve()
+    lock_path = WORKSPACE / ".cooja_controller.lock"
+    lock_stream = lock_path.open("a+")
+    try:
+        fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_stream.close()
+        print(
+            f"Another Cooja experiment holds {lock_path}; "
+            "trend collection will not start.",
+            file=sys.stderr,
+        )
+        return 2
+
     original_csc = COOJA_CSC.read_text()
     cmd_env = {
         "CONTIKI_NG": args.contiki_ng,
@@ -205,13 +284,27 @@ def main(argv: Iterable[str] | None = None) -> int:
             run_name = f"cycle_r500_s{seed}"
             output_dir = output_base / run_name
             log_dir = log_base / run_name
-            if _seed_is_complete(output_dir) and not args.rerun_completed:
-                print(f"[seed={seed}] Skipping completed output at {output_dir}")
-                continue
+            completion_issue = _seed_completion_issue(
+                output_dir,
+                min_valid_rows=max(0, args.min_valid_rows),
+                min_slotframes=max(0, args.min_slotframes),
+                required_profile="" if args.cycle_profiles else "balanced",
+            )
+            if not args.rerun_completed:
+                if completion_issue is None:
+                    print(f"[seed={seed}] Skipping validated output at {output_dir}")
+                    continue
+                if output_dir.exists():
+                    print(
+                        f"[seed={seed}] Existing output is not complete "
+                        f"({completion_issue}); rerunning."
+                    )
             _run_command(seed, cmd_env, output_dir, log_dir)
     finally:
         # Restore the CSC file to its original content.
         COOJA_CSC.write_text(original_csc)
+        fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN)
+        lock_stream.close()
 
     print("All seeds completed successfully.")
     return 0
