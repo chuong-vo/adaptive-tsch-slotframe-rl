@@ -1,62 +1,74 @@
-# Toi uu thich nghi kich thuoc slotframe TSCH bang hoc tang cuong trong SDWSN
+# Adaptive TSCH Slotframe Optimization with Reinforcement Learning in SDWSN
 
-Repository nay chua ma nguon va artifact cuoi cua quy trinh toi uu kich thuoc
-slotframe TSCH bang PPO trong kien truc SDWSN. Quy trinh thuc nghiem gom ba giai
-doan:
+This repository contains the source code and final experimental artifacts for
+adaptive TSCH slotframe-size optimization using Proximal Policy Optimization
+(PPO) in a Software-Defined Wireless Sensor Network (SDWSN).
 
-1. Thu thap du lieu Cooja va xay dung vector xu huong theo kich thuoc slotframe.
-2. Huan luyen chinh sach PPO tren moi truong so hoa tu cac vector xu huong.
-3. Trien khai model vao vong dieu khien Cooja va danh gia long-run tren nhieu seed.
+The experimental workflow has three stages:
 
-> **Luu y ve ten bien:** mot so bien moi truong van dung tien to `ELISE_` de
-> tuong thich voi ma nguon ke thua. Tien to nay khong lam thay doi pham vi cua
-> de tai: bien dieu khien duy nhat trong thi nghiem la kich thuoc slotframe TSCH.
+1. Collect Cooja measurements and estimate metric trends over the valid
+   slotframe-size domain.
+2. Train a PPO policy in a numerical environment built from the fitted trends.
+3. Deploy the selected policy in the Cooja control loop and evaluate it through
+   multi-seed long-run experiments.
 
-## 1. Cau truc repository
+> Some environment variables retain the `ELISE_` prefix for compatibility with
+> the inherited codebase. The experimental control variable in this work is the
+> TSCH slotframe size.
+
+## Repository Layout
 
 ```text
 .
-|-- SDWSN-controller/       # Control plane, moi truong RL, train va phan tich
-|-- contiki-ng/             # Data plane Contiki-NG va kich ban Cooja
+|-- SDWSN-controller/       # Control plane, RL environment, training, analysis
+|-- contiki-ng/             # Contiki-NG data plane and Cooja scenario
 |-- results/
-|   |-- trend/              # Du lieu trend cuoi: 20 seed
-|   |-- training/           # Model PPO duoc chon va ket qua danh gia
-|   `-- long_run/           # Long-run cuoi: seed 43-50
+|   |-- trend/              # Final trend dataset from 20 seeds
+|   |-- training/           # Selected PPO model and evaluation results
+|   `-- long_run/           # Final long-run results for seeds 43-50
 |-- run_trend_sweep.py
 |-- run_long_run_with_seed.sh
 |-- run_long_run_seed_range.sh
 `-- setup_rl_env.sh
 ```
 
-Repository khong chua log trung gian, checkpoint khong duoc chon, cache, virtual
-environment hoac file bao cao/luan van.
+Intermediate logs, unselected checkpoints, caches, virtual environments, and
+thesis/report files are intentionally excluded.
 
-## 2. Moi truong da kiem chung
+## Tested Environment
 
-Lan chay cuoi su dung:
+The final experiments were executed with:
 
-- Ubuntu 22.04/WSL2;
-- Python 3.10;
-- OpenJDK 17;
-- Contiki-NG va Cooja duoc dong goi trong `contiki-ng/`;
-- PyTorch 2.8.0;
-- Stable-Baselines3 2.0.0a5;
-- GPU NVIDIA CUDA 12.8 cho pha train. GPU khong bat buoc.
+- Ubuntu 22.04 under WSL2
+- Python 3.10
+- OpenJDK 17
+- Contiki-NG and Cooja included in this repository
+- PyTorch 2.8.0
+- Stable-Baselines3 2.0.0a5
+- NVIDIA CUDA 12.8 for PPO training
 
-Khuyen nghi toi thieu 16 GB RAM va 30 GB dung luong trong. Log Cooja cua mot dot
-long-run day du co the lon, du log khong duoc commit vao Git.
+A GPU is optional. Trend collection and long-run evaluation are dominated by
+Cooja simulation and run correctly on a CPU-only machine.
 
-## 3. Clone repository
+Recommended resources:
 
-Repository dang o che do private. Tai khoan GitHub can duoc cap quyen truoc khi
-clone.
+- 16 GB RAM or more
+- 30 GB or more of free disk space
+
+Cooja logs from a complete experiment can become large even though they are not
+committed to Git.
+
+## 1. Clone the Repository
+
+The repository is currently private. A GitHub account must be granted access
+before cloning.
 
 ```bash
 git clone https://github.com/chuong-vo/adaptive-tsch-slotframe-rl.git
 cd adaptive-tsch-slotframe-rl
 ```
 
-Hoac dung GitHub CLI:
+Alternatively, use GitHub CLI:
 
 ```bash
 gh auth login
@@ -64,9 +76,9 @@ gh repo clone chuong-vo/adaptive-tsch-slotframe-rl
 cd adaptive-tsch-slotframe-rl
 ```
 
-## 4. Cai dependency he thong
+## 2. Install System Dependencies
 
-Lenh tham khao cho Ubuntu 22.04:
+Example for Ubuntu 22.04:
 
 ```bash
 sudo apt update
@@ -80,55 +92,56 @@ sudo apt install -y \
   psmisc
 ```
 
-Kiem tra:
+Verify the installations:
 
 ```bash
 python3 --version
 java -version
 ```
 
-Python phai tu 3.10 tro len. Moi truong cua lan chay cuoi la Python 3.10; nen uu
-tien dung cung phien ban khi can tai lap chinh xac.
+Python 3.10 or later is required. Python 3.10 is recommended when exact
+reproduction of the final run is needed.
 
-## 5. Tao Python environment
+## 3. Create the Python Environment
 
-Script setup nhan hai tham so:
+The setup script accepts an environment directory and a PyTorch variant:
 
 ```text
 ./setup_rl_env.sh [VENV_DIR] [auto|cpu|cu128]
 ```
 
-### Tu dong chon CPU/GPU
+### Automatic selection
 
 ```bash
 ./setup_rl_env.sh .venv-rl auto
 source .venv-rl/bin/activate
 ```
 
-Che do `auto` chon CUDA 12.8 neu tim thay `nvidia-smi`; nguoc lai cai ban CPU.
+`auto` selects the CUDA 12.8 PyTorch build when `nvidia-smi` is available.
+Otherwise, it installs the CPU build.
 
-### Buoc dung CPU
+### CPU-only installation
 
 ```bash
 ./setup_rl_env.sh .venv-rl cpu
 source .venv-rl/bin/activate
 ```
 
-### Buoc dung CUDA 12.8
+### CUDA 12.8 installation
 
 ```bash
 ./setup_rl_env.sh .venv-rl cu128
 source .venv-rl/bin/activate
 ```
 
-Khai bao duong dan workspace:
+Export the workspace paths after activating the environment:
 
 ```bash
 export CONTIKI_NG="$PWD/contiki-ng"
 export PYTHONPATH="$PWD/SDWSN-controller${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
-Kiem tra Python, PyTorch va controller:
+Verify the Python environment:
 
 ```bash
 python -c "import torch; print('torch=', torch.__version__, 'cuda=', torch.cuda.is_available())"
@@ -136,21 +149,21 @@ python -c "import sdwsn_controller; print('sdwsn_controller: OK')"
 pip check
 ```
 
-## 6. Kiem tra source truoc khi chay
+## 4. Validate the Source Before Running
 
-### Unit test cho co che dieu khien slotframe
+### Slotframe-control unit tests
 
 ```bash
 pytest -q SDWSN-controller/tests/test_env_slotframe_controls.py
 ```
 
-Ket qua mong doi:
+Expected result:
 
 ```text
 ..... [100%]
 ```
 
-### Kiem tra Cooja/Gradle
+### Cooja/Gradle validation
 
 ```bash
 cd contiki-ng/tools/cooja
@@ -158,31 +171,33 @@ cd contiki-ng/tools/cooja
 cd ../../..
 ```
 
-Ket qua mong doi la `BUILD SUCCESSFUL`. Cooja target duoc build boi Cooja; khong
-chay truc tiep `make TARGET=cooja` trong thu muc mote.
+The expected result is `BUILD SUCCESSFUL`. Cooja builds the simulated mote
+target. Do not run `make TARGET=cooja` directly in the mote application
+directory.
 
-### Kiem tra port dieu khien
+### Controller port
 
-Mac dinh Cooja va controller giao tiep qua TCP port `60001`.
+Cooja and the controller communicate through TCP port `60001` by default.
 
 ```bash
 ss -ltnp | grep ':60001' || true
 ```
 
-Neu port bi mot tien trinh Cooja cu chiem:
+If an old Cooja process is holding the port:
 
 ```bash
 pkill -f 'org.contikios.cooja.Main' || true
 fuser -k 60001/tcp || true
 ```
 
-Chi thuc hien hai lenh tren khi khong co thi nghiem khac dang chay.
+Only run these commands when no other experiment is active.
 
-## 7. Smoke test
+## 5. Smoke Tests
 
-Smoke test xac nhan moi truong khoi dong duoc truoc khi chay dot day du.
+Run the smoke tests before starting a full experiment. Smoke outputs are written
+under `smoke/` and are ignored by Git.
 
-### 7.1 Trend smoke test
+### 5.1 Trend smoke test
 
 ```bash
 SMOKE_TREND_OUT="$PWD/smoke/trend/output"
@@ -200,19 +215,25 @@ python run_trend_sweep.py \
   --min-slotframes 15
 ```
 
-Smoke output hop le phai co:
+Inspect the generated files:
 
 ```bash
 find "$SMOKE_TREND_OUT/cycle_r500_s1" -maxdepth 1 -type f | sort
 ```
 
-Trong do can co `example.csv`, `coverage_summary.json` va
-`trend_vectors.json`. Tuyet doi khong dung vector tu smoke test de train model
-chinh.
+The output must include:
 
-### 7.2 Training smoke test
+```text
+example.csv
+coverage_summary.json
+trend_vectors.json
+```
 
-Training smoke test dung mot rollout PPO:
+Do not use vectors from a smoke run to train the final model.
+
+### 5.2 Training smoke test
+
+This test runs one PPO rollout:
 
 ```bash
 SMOKE_TRAIN="$PWD/smoke/training"
@@ -225,7 +246,7 @@ RL_N_EVAL_EPISODES=20 \
 python SDWSN-controller/tutorials/reinforcement-learning/training/test_numerical_reinforcement_learning.py
 ```
 
-### 7.3 Long-run smoke test
+### 5.3 Long-run smoke test
 
 ```bash
 MODEL="$PWD/results/training/trained_model/best_model.zip"
@@ -236,19 +257,20 @@ ELISE_LOG_BASE="$PWD/smoke/long_run/logs" \
 ./run_long_run_with_seed.sh 43 "$MODEL"
 ```
 
-Kiem tra:
+Verify the output:
 
 ```bash
 wc -l smoke/long_run/output/seed_43/example.csv
 ```
 
-File gom mot dong header va 20 dong cycle.
+The file should contain one header row and 20 data rows.
 
-## 8. Giai doan 1: thu thap trend vector
+## 6. Stage 1: Collect Trend Data
 
-Trend duoc thu trong Cooja voi profile `balanced` co dinh. Hanh dong nen dao
-chieu tang/giam slotframe; tham so exploration bo sung cac diem lay mau ngau
-nhien trong mien hop le.
+Trend data are collected in Cooja with the `balanced` requirement profile fixed.
+The baseline action pattern alternates between increasing and decreasing the
+slotframe size. Random exploration adds coverage across the valid slotframe
+domain, while the hold probability adds repeated observations.
 
 ```bash
 TREND_OUT="$PWD/SDWSN-controller/tutorials/reinforcement-learning/output/final_trend"
@@ -263,21 +285,29 @@ python run_trend_sweep.py \
   --max-wait-retries 3
 ```
 
-Mac dinh moi seed chay theo `max_episode_steps=1200` cua
-`native_controller_approx_model.json`, yeu cau toi thieu 1.000 cycle hop le va
-30 kich thuoc slotframe phan biet.
+By default, each seed runs for `max_episode_steps=1200`, as configured in
+`native_controller_approx_model.json`. A completed production seed requires at
+least:
 
-Script co checkpoint theo seed: seed chi duoc xem la hoan tat khi co du
-`example.csv`, `coverage_summary.json` va `trend_vectors.json`. Khi chay lai
-cung lenh, cac seed da hoan tat se duoc bo qua.
+- 1,000 valid measurement rows
+- 30 distinct slotframe sizes
+- `example.csv`
+- `coverage_summary.json`
+- `trend_vectors.json`
 
-Kiem tra tien do:
+### Resume behavior
+
+Checkpointing is performed at seed granularity. Re-running the same command
+skips seeds that already contain all required outputs. An interrupted or invalid
+seed is executed again.
+
+Count completed seeds:
 
 ```bash
 find "$TREND_OUT" -path '*/trend_vectors.json' | wc -l
 ```
 
-Kiem tra nhanh so dong tung seed:
+Check the number of rows in each seed:
 
 ```bash
 for csv in "$TREND_OUT"/cycle_r500_s*/example.csv; do
@@ -286,7 +316,7 @@ for csv in "$TREND_OUT"/cycle_r500_s*/example.csv; do
 done
 ```
 
-Neu mot seed loi, chay rieng seed do:
+Run one failed seed again:
 
 ```bash
 python run_trend_sweep.py \
@@ -298,11 +328,12 @@ python run_trend_sweep.py \
   --max-wait-retries 3
 ```
 
-Them `--rerun-completed` chi khi chu dong muon ghi lai seed da hoan tat.
+Use `--rerun-completed` only when a completed seed must intentionally be
+replaced.
 
-## 9. Giai doan 1b: fit trend va ghi vao config
+## 7. Fit the Pooled Trend Vectors
 
-Chi fit sau khi du 20 seed hop le:
+Run the fitting stage only after all 20 seeds pass the coverage checks:
 
 ```bash
 TRAIN_CONFIG="$PWD/SDWSN-controller/tutorials/reinforcement-learning/training/numerical_controller_rl.json"
@@ -313,11 +344,10 @@ python SDWSN-controller/tutorials/reinforcement-learning/plot_seed_trends.py \
   --min-valid-rows 1000 \
   --min-slotframes 30 \
   --required-profile balanced \
-  --min-seeds 20 \
   --write-config
 ```
 
-Ket qua fit nam tai:
+The pooled outputs are written to:
 
 ```text
 $TREND_OUT/summary/power_trends.png
@@ -326,7 +356,7 @@ $TREND_OUT/summary/reliability_trends.png
 $TREND_OUT/summary/summary_fits.json
 ```
 
-`--write-config` ghi he so gop vao ba truong:
+`--write-config` updates these coefficient arrays:
 
 ```text
 performance_metrics.energy.weights
@@ -334,19 +364,30 @@ performance_metrics.delay.weights
 performance_metrics.pdr.weights
 ```
 
-Khong sua thu cong cac he so sau buoc nay neu muc tieu la tai lap cung quy trinh.
+Do not manually modify the fitted coefficients when reproducing the same
+workflow.
 
-## 10. Giai doan 2: train PPO
+## 8. Stage 2: Train the PPO Policy
 
-Trong train:
+The current training configuration uses:
 
-- profile luan phien `balanced`, `delay`, `energy`, `reliability`;
-- slotframe khoi tao ngau nhien trong mien hop le 10-68;
-- action `0`, `1`, `2` lan luot la tang, giam va giu slotframe;
-- seed mac dinh cua dot cuoi la `123`;
-- tong so buoc cua dot cuoi la `5,996,544`.
+- Four rotating profiles: `balanced`, `delay`, `energy`, and `reliability`
+- A random initial slotframe size in the valid range 10-68
+- Three actions: increase, decrease, and hold
+- Training seed `123`
+- `5,996,544` requested training steps
+- Evaluation every `8,192` steps
+- 20 evaluation episodes
 
-### Chay foreground
+Action mapping:
+
+| Action | Meaning |
+|---:|---|
+| `0` | Increase to the next valid coprime slotframe size |
+| `1` | Decrease to the previous valid coprime slotframe size |
+| `2` | Hold the current slotframe size |
+
+### Foreground training
 
 ```bash
 TRAIN_ROOT="$PWD/SDWSN-controller/tutorials/reinforcement-learning/training/runs/final_train"
@@ -360,7 +401,7 @@ RL_N_EVAL_EPISODES=20 \
 python SDWSN-controller/tutorials/reinforcement-learning/training/test_numerical_reinforcement_learning.py
 ```
 
-### Chay background bang nohup
+### Background training with nohup
 
 ```bash
 TRAIN_ROOT="$PWD/SDWSN-controller/tutorials/reinforcement-learning/training/runs/final_train"
@@ -379,13 +420,13 @@ echo $! | tee "$TRAIN_ROOT/train.pid"
 tail -f "$TRAIN_ROOT/train.log"
 ```
 
-Kiem tra tien trinh:
+Check whether the process is still running:
 
 ```bash
 ps -p "$(cat "$TRAIN_ROOT/train.pid")" -o pid,etime,cmd
 ```
 
-Tim model canonical sau khi train:
+Locate the canonical model after training:
 
 ```bash
 MODEL="$(find "$TRAIN_ROOT" -path '*/trained_model/best_model.zip' -type f | sort | tail -n 1)"
@@ -393,7 +434,8 @@ test -n "$MODEL" && test -f "$MODEL"
 echo "$MODEL"
 ```
 
-Moi run tao mot thu muc `ppo_run_<timestamp>`. Cac artifact quan trong:
+Each execution creates a `ppo_run_<timestamp>` directory. The main artifacts
+are:
 
 ```text
 trained_model/best_model.zip
@@ -404,22 +446,23 @@ numerical_controller_rl.json
 output/*.png
 ```
 
-Chi proceed sang long-run khi `policy_grid_evaluation.csv` co du 20 truong hop va
-`direction_ok=True`.
+Proceed to long-run evaluation only after `policy_grid_evaluation.csv` contains
+all 20 grid cases and every case has `direction_ok=True`.
 
-## 11. Giai doan 3: long-run
+## 9. Stage 3: Long-Run Evaluation
 
-Long-run chay tuan tu de tranh xung dot Cooja va TCP port 60001. Moi seed gom
-1.200 cycle, chia thanh bon doan 300 cycle theo thu tu:
+Long-run seeds must execute sequentially because Cooja uses a single controller
+port. Each seed contains 1,200 cycles divided into four 300-cycle profile
+periods:
 
-| Profile | Trong so `(alpha, beta, delta)` | Uu tien |
+| Profile | Weights `(alpha, beta, delta)` | Priority |
 |---|---:|---|
-| balanced | `(0.4, 0.3, 0.3)` | can bang ba muc tieu |
-| delay | `(0.1, 0.8, 0.1)` | do tre |
-| energy | `(0.8, 0.1, 0.1)` | cong suat/nang luong |
-| reliability | `(0.1, 0.1, 0.8)` | do tin cay/PDR |
+| balanced | `(0.4, 0.3, 0.3)` | Balanced objectives |
+| delay | `(0.1, 0.8, 0.1)` | End-to-end delay |
+| energy | `(0.8, 0.1, 0.1)` | Power/energy consumption |
+| reliability | `(0.1, 0.1, 0.8)` | Reliability/PDR |
 
-Chay seed 43-50:
+Run seeds 43 through 50:
 
 ```bash
 MODEL="/absolute/path/to/trained_model/best_model.zip"
@@ -432,7 +475,7 @@ ELISE_MAX_CYCLES=1200 \
 ./run_long_run_seed_range.sh 43 50 "$MODEL"
 ```
 
-Kiem tra tien do:
+Check progress:
 
 ```bash
 for csv in "$LONG_OUT"/seed_*/example.csv; do
@@ -441,8 +484,9 @@ for csv in "$LONG_OUT"/seed_*/example.csv; do
 done
 ```
 
-Moi seed hoan tat phai co 1.200 dong du lieu. Long-run khong co checkpoint giua
-mot seed. Neu mat dien hoac crash giua seed, chay lai rieng seed do tu dau:
+Each completed seed must contain 1,200 data rows. Long-run evaluation does not
+checkpoint within a seed. If a power failure or crash interrupts one seed,
+restart that seed from the beginning:
 
 ```bash
 ELISE_OUTPUT_BASE="$LONG_OUT" \
@@ -451,11 +495,11 @@ ELISE_MAX_CYCLES=1200 \
 ./run_long_run_with_seed.sh 47 "$MODEL"
 ```
 
-Khong chay song song nhieu seed tren cung port 60001.
+Do not run multiple seeds concurrently on the same TCP port.
 
-## 12. Tong hop va ve ket qua long-run
+## 10. Analyze Long-Run Results
 
-Sau khi du seed:
+After all seeds have completed:
 
 ```bash
 python SDWSN-controller/tutorials/reinforcement-learning/long-run/analyze_long_run_results.py \
@@ -465,13 +509,13 @@ python SDWSN-controller/tutorials/reinforcement-learning/long-run/analyze_long_r
   --timeline-window 15
 ```
 
-Kiem tra chat luong:
+Inspect the quality summary:
 
 ```bash
 cat "$LONG_OUT/analysis/quality_summary.json"
 ```
 
-Dieu kien cua dot cuoi:
+The final committed run satisfies:
 
 ```text
 seed_count = 8
@@ -482,23 +526,23 @@ wait_timeouts = 0
 all_runs_complete = true
 ```
 
-## 13. Artifact cuoi da commit
+## 11. Committed Final Artifacts
 
-Khong can chay lai de xem ket qua cuoi:
+The final results can be inspected without re-running the experiments:
 
 ```text
-results/trend/       20 seed x 1.200 cycle
-results/training/    PPO seed 123, 5.996.544 buoc, policy grid 20/20
-results/long_run/    seed 43-50 x 1.200 cycle
+results/trend/       20 seeds x 1,200 cycles
+results/training/    PPO seed 123, 5,996,544 requested steps, grid 20/20
+results/long_run/    seeds 43-50 x 1,200 cycles
 ```
 
-Xac minh artifact khong bi thay doi:
+Verify that the artifacts have not changed:
 
 ```bash
 sha256sum --check results/MANIFEST.sha256
 ```
 
-Load model tren CPU:
+Load the selected model on a CPU:
 
 ```bash
 python - <<'PY'
@@ -509,56 +553,58 @@ print("model: OK")
 PY
 ```
 
-## 14. Dinh nghia du lieu chinh
+## 12. Main Data Fields
 
-Ba file CSV chinh la trend `example.csv`, training `eval_metrics.csv` va
-long-run `example.csv`.
+The primary CSV files are the trend and long-run `example.csv` files and the
+training `eval_metrics.csv` file.
 
-| Cot | Y nghia |
+| Column | Description |
 |---|---|
-| `cycle_idx` | chi so cycle trong mot seed |
-| `seed` | random seed cua Cooja |
-| `profile` | ho so balanced/delay/energy/reliability |
-| `alpha`, `beta`, `delta` | trong so muc tieu |
-| `current_sf_len` | kich thuoc slotframe dang ap dung |
-| `last_ts_in_schedule` | timeslot hoat dong cuoi trong schedule |
-| `power_normalized` | cong suat da chuan hoa |
-| `delay_mean` | do tre trung binh tho |
-| `delay_normalized` | do tre da chuan hoa |
-| `pdr_mean` | PDR trung binh giua cac nut |
-| `reward` | phan thuong tinh tu chi so va trong so |
-| `action` | hanh dong tac tu yeu cau |
-| `applied_action` | hanh dong thuc su duoc ap dung |
-| `requested_sf_len` | slotframe tac tu yeu cau |
-| `applied_sf_len` | slotframe thuc su duoc ap dung |
-| `action_overridden` | hanh dong co bi chan tai bien hay khong |
-| `wait_timeout` | cua so xu ly bi timeout |
-| `valid_cycle` | cycle co duoc dung trong phan tich hay khong |
+| `cycle_idx` | Cycle index within one seed |
+| `seed` | Cooja random seed |
+| `profile` | Active balanced/delay/energy/reliability profile |
+| `alpha`, `beta`, `delta` | Objective weights |
+| `current_sf_len` | Slotframe size used in the cycle |
+| `last_ts_in_schedule` | Last active timeslot in the schedule |
+| `power_normalized` | Normalized power metric |
+| `delay_mean` | Raw network-wide mean delay |
+| `delay_normalized` | Normalized delay metric |
+| `pdr_mean` | Mean packet delivery ratio across nodes |
+| `reward` | Reward computed from metrics and active weights |
+| `action` | Action requested by the policy or sampler |
+| `applied_action` | Action that was actually applied |
+| `requested_sf_len` | Requested slotframe size |
+| `applied_sf_len` | Slotframe size that was actually applied |
+| `action_overridden` | Whether boundary handling replaced the action |
+| `wait_timeout` | Whether the processing window timed out |
+| `valid_cycle` | Whether the cycle is valid for analysis |
 
-`delay_mean` la do tre trung binh toan mang cua mot cycle, khong phai danh sach
-do tre cua tung goi.
+`delay_mean` is the network-wide mean for one cycle, not a list of per-packet
+delays.
 
-## 15. Stall, retry va tinh dung dan cua du lieu
+## 13. Stall and Retry Semantics
 
-- Controller cho mot processing window toi da 30 giay.
-- Khi stall, cung cau hinh va hanh dong dang danh gia duoc retry toi da ba lan.
-- Cycle chi duoc ghi la hop le sau khi xu ly thanh cong.
-- `wait_timeout=True` va `valid_cycle=False` danh dau cycle that bai.
-- Long-run cuoi trong `results/long_run` khong co wait timeout va du 9.600 cycle
-  hop le.
+- The controller allows up to 30 seconds for one processing window.
+- If the window stalls, the same pending configuration and action are retried up
+  to three times.
+- A cycle is recorded as valid only after successful processing.
+- Failed observations are marked with `wait_timeout=True` and
+  `valid_cycle=False`.
+- The committed final long-run dataset has no wait timeouts and contains all
+  9,600 expected valid cycles.
 
-Khong giam timeout hoac bo qua retry chi de chay nhanh hon, vi dieu nay co the
-lam thay doi tap du lieu.
+Do not reduce the timeout or disable retries merely to shorten execution time.
+Doing so can change the resulting dataset.
 
-## 16. Xu ly loi thuong gap
+## 14. Troubleshooting
 
-### Dung o `Waiting for Cooja to start`
+### Stuck at `Waiting for Cooja to start`
 
-1. Kiem tra Java 17: `java -version`.
-2. Kiem tra port 60001.
-3. Tat Cooja cu bang cac lenh o Muc 6.
-4. Chay `./gradlew test` trong `contiki-ng/tools/cooja`.
-5. Doc log trong thu muc duoc khai bao boi `ELISE_LOG_BASE`.
+1. Verify Java 17 with `java -version`.
+2. Check whether port `60001` is occupied.
+3. Stop stale Cooja processes using the commands in Section 4.
+4. Run `./gradlew test` in `contiki-ng/tools/cooja`.
+5. Inspect the log directory configured through `ELISE_LOG_BASE`.
 
 ### `ModuleNotFoundError`
 
@@ -568,19 +614,19 @@ export PYTHONPATH="$PWD/SDWSN-controller${PYTHONPATH:+:$PYTHONPATH}"
 pip check
 ```
 
-### CUDA khong kha dung
+### CUDA is unavailable
 
-GPU khong bat buoc. Tao lai environment CPU:
+GPU acceleration is optional. Create a CPU environment:
 
 ```bash
 ./setup_rl_env.sh .venv-rl-cpu cpu
 source .venv-rl-cpu/bin/activate
 ```
 
-### Permission denied trong output
+### Permission denied while creating output
 
-Khong chay pipeline bang `sudo`. Sua ownership cua thu muc da tung duoc tao boi
-root:
+Do not run the pipeline with `sudo`. Repair ownership of directories previously
+created by root:
 
 ```bash
 sudo chown -R "$USER:$USER" \
@@ -591,25 +637,28 @@ sudo chown -R "$USER:$USER" \
   SDWSN-controller/tutorials/reinforcement-learning/long-run/logs
 ```
 
-### Mat dien hoac crash
+### Power failure or interrupted process
 
-- Trend: chay lai cung lenh; seed hoan tat duoc tu dong bo qua.
-- Training: dung model chi khi run da tao `model_selection.json` va ket qua policy
-  grid. Run dang do khong duoc xem la model cuoi.
-- Long-run: giu cac seed da hoan tat va chay lai seed dang do tu dau.
+- Trend collection: re-run the same command. Completed seeds are skipped.
+- Training: use a run only after it produces `model_selection.json` and the
+  policy-grid evaluation. An interrupted run is not a final model.
+- Long-run evaluation: preserve completed seeds and restart the interrupted seed
+  from its beginning.
 
-## 17. Nguyen tac khi mo rong nghien cuu
+## 15. Reproducibility Guidelines
 
-- Tao output folder moi cho moi dot thi nghiem.
-- Khong ghi de `results/`, day la baseline cuoi cua de tai.
-- Ghi lai seed, config, model path va Git commit cho moi dot chay.
-- Chi thay doi mot nhom bien moi lan khi so sanh.
-- Danh gia theo seed; khong xem tung cycle trong cung seed la mau doc lap.
-- Khong commit virtual environment, log Cooja, checkpoint trung gian hoac bao cao
-  ca nhan.
+- Create a new output directory for every experiment.
+- Treat `results/` as the final reference baseline and do not overwrite it.
+- Record the random seed, configuration, model path, and Git commit.
+- Change one controlled group of parameters at a time.
+- Perform statistical comparisons at seed level; cycles from one seed are not
+  independent experimental replicates.
+- Do not commit virtual environments, Cooja logs, intermediate checkpoints, or
+  personal reports.
 
-## 18. Nguon va giay phep
+## 16. Upstream Source and Licenses
 
-Control plane ke thua SDWSN-controller/ELISE cua Fernando Jurado-Lasso; data
-plane ke thua Contiki-NG va cac thanh phan phu thuoc cua no. Xem license va
-copyright trong tung thu muc/tep nguon truoc khi tai phan phoi.
+The control plane inherits components from SDWSN-controller/ELISE by Fernando
+Jurado-Lasso. The data plane inherits Contiki-NG and its bundled dependencies.
+Review the license and copyright notices in each source directory before
+redistributing the project.
