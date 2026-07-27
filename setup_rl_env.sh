@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${1:-${SCRIPT_DIR}/.venv-rl}"
+TORCH_VARIANT="${2:-${RL_TORCH_VARIANT:-auto}}"
 CONTROLLER_ROOT="${SCRIPT_DIR}/SDWSN-controller"
 
 echo "Creating RL virtual environment at: ${VENV_DIR}"
@@ -13,9 +14,32 @@ PIP_BIN="${VENV_DIR}/bin/pip"
 
 "${PIP_BIN}" install --upgrade pip setuptools wheel
 
-# GPU-enabled PyTorch for the local RTX 5070 Ti / CUDA 12.8 stack.
+# Select a portable default while preserving the CUDA 12.8 environment used
+# for the final experiment.
+if [ "$TORCH_VARIANT" = "auto" ]; then
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    TORCH_VARIANT="cu128"
+  else
+    TORCH_VARIANT="cpu"
+  fi
+fi
+
+case "$TORCH_VARIANT" in
+  cpu)
+    TORCH_INDEX_URL="https://download.pytorch.org/whl/cpu"
+    ;;
+  cu128)
+    TORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"
+    ;;
+  *)
+    echo "Error: torch variant must be one of: auto, cpu, cu128" >&2
+    exit 2
+    ;;
+esac
+
+echo "Installing PyTorch variant: ${TORCH_VARIANT}"
 "${PIP_BIN}" install \
-  --index-url https://download.pytorch.org/whl/cu128 \
+  --index-url "$TORCH_INDEX_URL" \
   torch==2.8.0
 
 # Project runtime dependencies. TensorFlow is intentionally excluded: the RL
@@ -29,6 +53,7 @@ PIP_BIN="${VENV_DIR}/bin/pip"
   paho-mqtt \
   pyfiglet \
   python-daemon \
+  pytest \
   rich \
   tomli
 

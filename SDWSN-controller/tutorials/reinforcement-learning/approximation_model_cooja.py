@@ -136,6 +136,7 @@ def run(
     requirements_refresh_every = max(0, int(requirements_refresh_every))
     exploration_prob = max(0.0, min(1.0, float(exploration_prob)))
     hold_prob = max(0.0, min(1.0, float(hold_prob)))
+    max_cycles = max(0, _env_int("ELISE_TREND_MAX_CYCLES", default=0))
     randomize_requirements = bool(randomize_requirements)
     requirements_mode = (requirements_mode or "dirichlet").lower()
 
@@ -238,6 +239,12 @@ def run(
                 logger.warning("Stopping trend run after wait timeout at cycle %d", cycle_idx)
             else:
                 logger.info("Number of max episodes reached at cycle %d", cycle_idx)
+            break
+        if max_cycles and cycle_idx >= max_cycles:
+            logger.info(
+                "Reached ELISE_TREND_MAX_CYCLES=%d, stopping trend run.",
+                max_cycles,
+            )
             break
         if (
             randomize_requirements

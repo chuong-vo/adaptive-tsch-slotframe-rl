@@ -27,6 +27,7 @@ target/
 /tensorlog/
 /runs/
 /artifacts/
+/smoke/
 
 # Cooja runtime files
 COOJA.log

@@ -151,6 +151,24 @@ def main(argv: Iterable[str] | None = None) -> int:
         help="Maximum retries after a processing-window stall.",
     )
     parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=0,
+        help="Stop each seed after this many cycles; 0 uses the configured episode limit.",
+    )
+    parser.add_argument(
+        "--min-valid-rows",
+        type=int,
+        default=1000,
+        help="Minimum valid rows required by per-seed trend analysis.",
+    )
+    parser.add_argument(
+        "--min-slotframes",
+        type=int,
+        default=30,
+        help="Minimum distinct slotframes required by per-seed trend analysis.",
+    )
+    parser.add_argument(
         "--rerun-completed",
         action="store_true",
         help="Rerun seeds even when example.csv, coverage_summary.json, and trend_vectors.json already exist.",
@@ -174,6 +192,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         "ELISE_SLOTFRAME_EXPLORE_PROB": str(args.explore_prob),
         "ELISE_SLOTFRAME_HOLD_PROB": str(args.hold_prob),
         "ELISE_MAX_WAIT_RETRIES": str(args.max_wait_retries),
+        "ELISE_TREND_MAX_CYCLES": str(max(0, args.max_cycles)),
+        "ELISE_MIN_TREND_VALID_ROWS": str(max(0, args.min_valid_rows)),
+        "ELISE_MIN_TREND_SLOTFRAMES": str(max(0, args.min_slotframes)),
     }
 
     try:

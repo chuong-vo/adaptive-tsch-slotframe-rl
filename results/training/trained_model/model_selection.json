@@ -1,7 +1,8 @@
 {
   "selected_by": "evaluation",
-  "selected_source_path": "trained_model/eval_best/best_model.zip",
+  "selected_source_path": "trained_model/best_model.zip",
   "canonical_model_path": "trained_model/best_model.zip",
+  "release_note": "The canonical model is byte-identical to the evaluation-selected checkpoint; intermediate checkpoint folders are not included.",
   "seed": 123,
   "eval_frequency": 8192,
   "eval_episodes": 20,
