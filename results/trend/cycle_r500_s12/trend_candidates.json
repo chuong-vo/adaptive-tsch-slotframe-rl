@@ -1,0 +1,107 @@
+{
+  "power": [
+    {
+      "degree": 10,
+      "weighted_r2": 0.9888082652473287,
+      "monotonic_rate": 0.87
+    },
+    {
+      "degree": 9,
+      "weighted_r2": 0.9882037656435793,
+      "monotonic_rate": 0.875
+    },
+    {
+      "degree": 8,
+      "weighted_r2": 0.9881515872565119,
+      "monotonic_rate": 0.87
+    },
+    {
+      "degree": 7,
+      "weighted_r2": 0.9828962613681693,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 6,
+      "weighted_r2": 0.9828631893040167,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 5,
+      "weighted_r2": 0.9828183644719841,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 4,
+      "weighted_r2": 0.9818053657394775,
+      "monotonic_rate": 0.965
+    },
+    {
+      "degree": 3,
+      "weighted_r2": 0.9758636591321289,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 2,
+      "weighted_r2": 0.9405094772640764,
+      "monotonic_rate": 0.8
+    },
+    {
+      "degree": 1,
+      "weighted_r2": 0.7921230263409312,
+      "monotonic_rate": 1.0
+    }
+  ],
+  "delay": [
+    {
+      "degree": 10,
+      "weighted_r2": 0.9879117235944491,
+      "monotonic_rate": 0.995
+    },
+    {
+      "degree": 9,
+      "weighted_r2": 0.9878992251721403,
+      "monotonic_rate": 0.99
+    },
+    {
+      "degree": 8,
+      "weighted_r2": 0.987174449945331,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 7,
+      "weighted_r2": 0.9871731592852042,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 6,
+      "weighted_r2": 0.9869688995449594,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 5,
+      "weighted_r2": 0.9868676286971427,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 4,
+      "weighted_r2": 0.9857306990507136,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 3,
+      "weighted_r2": 0.9857324432046473,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 2,
+      "weighted_r2": 0.9852910550190833,
+      "monotonic_rate": 1.0
+    },
+    {
+      "degree": 1,
+      "weighted_r2": 0.984222178253799,
+      "monotonic_rate": 1.0
+    }
+  ],
+  "reliability": null
+}

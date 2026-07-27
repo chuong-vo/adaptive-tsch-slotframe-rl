@@ -1,0 +1,33 @@
+{
+  "name": "numerical controller approx model",
+  "controller_type": "numerical controller",
+  "reinforcement_learning": {
+    "reward_processor": "NumericalRewardProcessing",
+    "max_episode_steps": 300
+  },
+  "performance_metrics": {
+    "energy": {
+      "weights": [
+        -5.12500817543608e-07,
+        7.60689474109919e-05,
+        -0.0038599631959483774,
+        0.18451841625064785
+      ],
+      "norm_offset": 0.0
+    },
+    "delay": {
+      "weights": [
+        0.0006161195070766642,
+        -0.0010252847858710393
+      ],
+      "norm_offset": 0.0
+    },
+    "pdr": {
+      "weights": [
+        -0.00033292129556816534,
+        0.9946048171675351
+      ],
+      "norm_offset": 0.0
+    }
+  }
+}

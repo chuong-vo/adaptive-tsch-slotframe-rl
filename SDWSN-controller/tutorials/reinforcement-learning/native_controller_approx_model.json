@@ -1,0 +1,50 @@
+{
+  "name": "native controller approx model",
+  "controller_type": "native controller",
+  "network": {
+    "name": "Cooja",
+    "processing_window": 400,
+    "stall_timeout": 30.0
+  },
+  "sink_comm": {
+    "name": "socket",
+    "host_dev": "127.0.0.1",
+    "port_baud": 60001
+  },
+  "tsch": {
+    "scheduler": "Contention Free Scheduler",
+    "max_channel": 16,
+    "max_slotframe": 70,
+    "slot_duration": 10
+  },
+  "routing": {
+    "algo": "Dijkstra"
+  },
+  "contiki": {
+    "script_folder": "examples/elise",
+    "source": "${CONTIKI_NG}",
+    "simulation_script": "cooja-elise.csc",
+    "port": 60001
+  },
+  "reinforcement_learning": {
+    "reward_processor": "EmulatedRewardProcessing",
+    "max_episode_steps": 1200
+  },
+  "performance_metrics": {
+    "energy": {
+      "min": 0,
+      "max": 5000,
+      "norm_offset": 0.0
+    },
+    "delay": {
+      "min": 10,
+      "max": 15000,
+      "norm_offset": 0.0
+    },
+    "pdr": {
+      "min": 0,
+      "max": 1,
+      "norm_offset": 0.0
+    }
+  }
+}

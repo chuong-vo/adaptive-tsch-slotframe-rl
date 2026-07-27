@@ -1,0 +1,64 @@
+# Python environments and caches
+.venv*/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Native and Java build artifacts
+build/
+dist/
+target/
+*.o
+*.a
+*.so
+*.class
+
+# Generated experiment data (final artifacts live under /results)
+/SDWSN-controller/tutorials/reinforcement-learning/output/
+/SDWSN-controller/tutorials/reinforcement-learning/tensorlog/
+/SDWSN-controller/tutorials/reinforcement-learning/training/runs/
+/SDWSN-controller/tutorials/reinforcement-learning/long-run/output/
+/SDWSN-controller/tutorials/reinforcement-learning/long-run/logs/
+/tensorlog/
+/runs/
+/artifacts/
+
+# Cooja runtime files
+COOJA.log
+COOJA.testlog
+COOJA.stdout.log
+*.csc.bak
+
+# Local configuration and editor files
+.env
+.env.*
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Thesis/report material and document-processing scratch space
+/VoNguyenChuong*
+/docs/
+/output/doc/
+/report_analysis/
+/tmp/
+*.docx
+*.odt
+
+# Agent-specific workspace state
+/AGENTS.md
+/SOUL.md
+/USER.md
+/TOOLS.md
+/HEARTBEAT.md
+/IDENTITY.md
+/MEMORY.md
+/memory/
+/.openclaw/
+/state/

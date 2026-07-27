@@ -1,0 +1,144 @@
+{
+  "power": {
+    "wls": {
+      "degree": 3,
+      "coefficients": [
+        -5.12500817543608e-07,
+        7.60689474109919e-05,
+        -0.0038599631959483774,
+        0.18451841625064785
+      ],
+      "pooled_weighted_r2": 0.9958392657796473,
+      "monotonic_rate": 1.0,
+      "candidates": [
+        {
+          "degree": 1,
+          "pooled_weighted_r2": 0.791032929048818,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 2,
+          "pooled_weighted_r2": 0.9589392161168379,
+          "monotonic_rate": 0.781563126252505
+        },
+        {
+          "degree": 3,
+          "pooled_weighted_r2": 0.9958392657796473,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 4,
+          "pooled_weighted_r2": 0.9959556622631488,
+          "monotonic_rate": 1.0
+        }
+      ]
+    },
+    "model": {
+      "degree": 3,
+      "coefficients": [
+        -5.12500817543608e-07,
+        7.60689474109919e-05,
+        -0.0038599631959483774,
+        0.18451841625064785
+      ]
+    }
+  },
+  "delay": {
+    "wls": {
+      "degree": 1,
+      "coefficients": [
+        0.0006161195070766642,
+        -0.0010252847858710393
+      ],
+      "pooled_weighted_r2": 0.9182783337843328,
+      "monotonic_rate": 1.0,
+      "candidates": [
+        {
+          "degree": 1,
+          "pooled_weighted_r2": 0.9182783337843328,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 2,
+          "pooled_weighted_r2": 0.9183072921278974,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 3,
+          "pooled_weighted_r2": 0.9183072921278974,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 4,
+          "pooled_weighted_r2": 0.9183072921278974,
+          "monotonic_rate": 1.0
+        }
+      ]
+    },
+    "model": {
+      "degree": 1,
+      "coefficients": [
+        0.0006161195070766642,
+        -0.0010252847858710393
+      ]
+    }
+  },
+  "reliability": {
+    "wls": {
+      "degree": 1,
+      "coefficients": [
+        -0.00033292129556816534,
+        0.9946048171675351
+      ],
+      "pooled_weighted_r2": 0.7099370178080922,
+      "monotonic_rate": 1.0,
+      "candidates": [
+        {
+          "degree": 1,
+          "pooled_weighted_r2": 0.7099370178080922,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 2,
+          "pooled_weighted_r2": 0.7099370178081388,
+          "monotonic_rate": 1.0
+        },
+        {
+          "degree": 3,
+          "pooled_weighted_r2": 0.7099370178081439,
+          "monotonic_rate": 1.0
+        }
+      ]
+    },
+    "model": {
+      "degree": 1,
+      "coefficients": [
+        -0.00033292129556816534,
+        0.9946048171675351
+      ]
+    }
+  },
+  "included_seeds": [
+    "cycle_r500_s1",
+    "cycle_r500_s10",
+    "cycle_r500_s11",
+    "cycle_r500_s12",
+    "cycle_r500_s13",
+    "cycle_r500_s14",
+    "cycle_r500_s15",
+    "cycle_r500_s16",
+    "cycle_r500_s17",
+    "cycle_r500_s18",
+    "cycle_r500_s19",
+    "cycle_r500_s2",
+    "cycle_r500_s20",
+    "cycle_r500_s3",
+    "cycle_r500_s4",
+    "cycle_r500_s5",
+    "cycle_r500_s6",
+    "cycle_r500_s7",
+    "cycle_r500_s8",
+    "cycle_r500_s9"
+  ],
+  "skipped_seeds": []
+}

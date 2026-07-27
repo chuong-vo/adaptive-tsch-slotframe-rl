@@ -1,0 +1,9 @@
+seed,rows,cycle_min,cycle_max,cycles_contiguous,duplicate_cycles,valid_cycles,invalid_cycles,wait_timeouts,profile_counts_ok,profile_weights_ok,balanced_cycles,delay_cycles,energy_cycles,reliability_cycles
+43,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+44,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+45,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+46,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+47,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+48,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+49,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300
+50,1200,1,1200,True,0,1200,0,0,True,True,300,300,300,300

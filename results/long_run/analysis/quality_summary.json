@@ -1,0 +1,21 @@
+{
+  "input_dir": "results/long_run",
+  "seed_count": 8,
+  "seeds": [
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50
+  ],
+  "total_rows": 9600,
+  "valid_cycles": 9600,
+  "invalid_cycles": 0,
+  "wait_timeouts": 0,
+  "transition_cycles_excluded": 50,
+  "steady_cycles_per_profile_per_seed": 250,
+  "all_runs_complete": true
+}

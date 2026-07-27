@@ -1,0 +1,5 @@
+profile,cycles,raw_increase,raw_decrease,raw_hold,applied_increase,applied_decrease,applied_hold,overrides,override_rate_percent,cycles_at_min_sf,cycles_at_max_sf
+balanced,2400,1223,1114,63,1223,1114,63,0,0.0,1,1051
+delay,2400,3,2397,0,3,112,2285,2285,95.20833333333333,2293,3
+energy,2400,2375,11,14,299,3,2098,2084,86.83333333333333,8,2101
+reliability,2400,7,2392,1,0,296,2104,2103,87.625,2104,8

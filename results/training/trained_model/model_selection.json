@@ -1,0 +1,37 @@
+{
+  "selected_by": "evaluation",
+  "selected_source_path": "trained_model/eval_best/best_model.zip",
+  "canonical_model_path": "trained_model/best_model.zip",
+  "seed": 123,
+  "eval_frequency": 8192,
+  "eval_episodes": 20,
+  "eval_initial_slotframes": [
+    10,
+    25,
+    40,
+    55,
+    68
+  ],
+  "profiles": [
+    "balanced",
+    "delay",
+    "energy",
+    "reliability"
+  ],
+  "controller_config_snapshot": "numerical_controller_rl.json",
+  "training": {
+    "requested_timesteps": 5996544,
+    "effective_timesteps": 5996544,
+    "max_episode_steps": 300,
+    "slotframe_min": 10,
+    "slotframe_max": 68,
+    "initial_slotframe_mode": "random",
+    "initial_slotframe_min": 10,
+    "initial_slotframe_max": 68
+  },
+  "policy_grid_evaluation": {
+    "passed": 20,
+    "total": 20,
+    "summary_path": "metrics/policy_grid_evaluation.csv"
+  }
+}
