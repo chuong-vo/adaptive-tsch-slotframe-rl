@@ -145,12 +145,72 @@ delay, and PDR as functions of slotframe size. It has no per-node topology,
 link metrics, routes, or schedules. Wrapping it with a fabricated constant
 graph would let code run but would not train a meaningful GNN.
 
-The next experimental step must therefore provide topology-aware training
-observations. The two valid approaches are:
+The trend collector can now record topology-aware transitions directly from
+Cooja. Recording is optional and does not alter action selection, reward
+calculation, retries, or the existing CSV output. Each record contains:
 
-1. Collect graph snapshots from Cooja and train with a graph replay/surrogate
-   environment.
-2. Train online against Cooja, which is correct but substantially slower.
+1. Graph state before the action.
+2. Requested and applied action and slotframe size.
+3. Graph state after the action.
+4. Environment and returned rewards.
+5. Valid-cycle, stall, termination, and truncation flags.
 
-This decision must be made before replacing the baseline model in the long-run
-evaluation.
+The compressed dataset and its integrity summary are published atomically as:
+
+```text
+graph_transitions.jsonl.gz
+graph_transitions_summary.json
+```
+
+Runs write to `.part` files and replace final artifacts only on normal close.
+A checksum, record counts, feature schemas, normalization parameters, action
+counts, profile counts, and slotframe coverage are validated before a seed is
+considered complete. Any interrupted or mismatched artifact pair is rerun.
+
+### Dataset smoke run
+
+From the repository root:
+
+```bash
+python run_trend_sweep.py \
+  --seeds 1 \
+  --output-base "$PWD/smoke/gnn_graph/output" \
+  --log-base "$PWD/smoke/gnn_graph/logs" \
+  --max-cycles 40 \
+  --min-valid-rows 20 \
+  --min-slotframes 0 \
+  --explore-prob 0.35 \
+  --hold-prob 0.15 \
+  --record-graphs \
+  --rerun-completed
+```
+
+### Full graph collection
+
+The policy must see all requirement profiles during training. Use profile
+cycling for the GNN dataset even though balanced-only collection remains valid
+for fitting physical metric trends:
+
+```bash
+GRAPH_OUT="$PWD/runs/gnn_graph_collection/output"
+GRAPH_LOG="$PWD/runs/gnn_graph_collection/logs"
+
+python run_trend_sweep.py \
+  --start 1 \
+  --count 20 \
+  --output-base "$GRAPH_OUT" \
+  --log-base "$GRAPH_LOG" \
+  --cycle-profiles \
+  --requirements-refresh-every 300 \
+  --explore-prob 0.35 \
+  --hold-prob 0.15 \
+  --max-wait-retries 3 \
+  --record-graphs
+```
+
+Invalid/stalled transitions remain in the dataset for diagnostics and are
+marked with `valid_cycle=false`. They must be excluded from model fitting.
+
+The next implementation step is to build and validate a graph-aware surrogate
+environment from these transitions. Online PPO training against Cooja remains
+correct but is substantially slower.

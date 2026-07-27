@@ -21,6 +21,10 @@ import sys
 from pathlib import Path
 from typing import Iterable, List
 
+from sdwsn_controller.reinforcement_learning.graph_dataset import (
+    graph_dataset_completion_issue,
+)
+
 
 WORKSPACE = Path(__file__).resolve().parent
 RL_DIR = WORKSPACE / "SDWSN-controller" / "tutorials" / "reinforcement-learning"
@@ -77,6 +81,7 @@ def _seed_completion_issue(
     min_valid_rows: int,
     min_slotframes: int,
     required_profile: str,
+    require_graph_dataset: bool = False,
 ) -> str | None:
     required = ("example.csv", "coverage_summary.json", "trend_vectors.json")
     missing = [name for name in required if not (output_dir / name).is_file()]
@@ -136,6 +141,14 @@ def _seed_completion_issue(
                 return f"non-finite coefficients for trend metric: {metric}"
         except (TypeError, ValueError):
             return f"non-numeric coefficients for trend metric: {metric}"
+
+    if require_graph_dataset:
+        graph_issue = graph_dataset_completion_issue(
+            output_dir,
+            min_valid_records=min_valid_rows,
+        )
+        if graph_issue is not None:
+            return graph_issue
 
     return None
 
@@ -237,7 +250,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument(
         "--rerun-completed",
         action="store_true",
-        help="Rerun seeds even when example.csv, coverage_summary.json, and trend_vectors.json already exist.",
+        help="Rerun seeds even when all requested artifacts already validate.",
+    )
+    parser.add_argument(
+        "--record-graphs",
+        action="store_true",
+        help="Record graph_before/action/graph_after transitions for GNN training.",
     )
     args = parser.parse_args(argv)
 
@@ -274,6 +292,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "ELISE_TREND_MAX_CYCLES": str(max(0, args.max_cycles)),
         "ELISE_MIN_TREND_VALID_ROWS": str(max(0, args.min_valid_rows)),
         "ELISE_MIN_TREND_SLOTFRAMES": str(max(0, args.min_slotframes)),
+        "ELISE_RECORD_GRAPH_TRANSITIONS": "1" if args.record_graphs else "0",
     }
 
     try:
@@ -289,6 +308,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 min_valid_rows=max(0, args.min_valid_rows),
                 min_slotframes=max(0, args.min_slotframes),
                 required_profile="" if args.cycle_profiles else "balanced",
+                require_graph_dataset=args.record_graphs,
             )
             if not args.rerun_completed:
                 if completion_issue is None:
@@ -300,6 +320,18 @@ def main(argv: Iterable[str] | None = None) -> int:
                         f"({completion_issue}); rerunning."
                     )
             _run_command(seed, cmd_env, output_dir, log_dir)
+            completion_issue = _seed_completion_issue(
+                output_dir,
+                min_valid_rows=max(0, args.min_valid_rows),
+                min_slotframes=max(0, args.min_slotframes),
+                required_profile="" if args.cycle_profiles else "balanced",
+                require_graph_dataset=args.record_graphs,
+            )
+            if completion_issue is not None:
+                raise RuntimeError(
+                    f"seed {seed} finished with invalid output: "
+                    f"{completion_issue}"
+                )
     finally:
         # Restore the CSC file to its original content.
         COOJA_CSC.write_text(original_csc)

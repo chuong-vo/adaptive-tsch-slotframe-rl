@@ -94,3 +94,18 @@ def test_non_numeric_coefficients_are_rejected(tmp_path):
     assert _completion_issue(seed_dir) == (
         "non-numeric coefficients for trend metric: delay"
     )
+
+
+def test_graph_dataset_can_be_required_for_gnn_collection(tmp_path):
+    seed_dir = tmp_path / "cycle_r500_s1"
+    _write_valid_seed(seed_dir)
+
+    issue = _seed_completion_issue(
+        seed_dir,
+        min_valid_rows=1000,
+        min_slotframes=30,
+        required_profile="balanced",
+        require_graph_dataset=True,
+    )
+
+    assert issue.startswith("missing graph files:")

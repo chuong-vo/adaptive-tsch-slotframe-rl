@@ -15,6 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from sdwsn_controller.config import SDWSNControllerConfig, CONTROLLERS
+from sdwsn_controller.reinforcement_learning.graph_dataset import (
+    GraphTransitionDatasetWriter,
+)
+from sdwsn_controller.reinforcement_learning.graph_observation import (
+    GraphObservationBuilder,
+)
 from sdwsn_controller.result_analysis import run_analysis
 
 from rich.logging import RichHandler
@@ -111,12 +117,18 @@ def run(
     hold_prob=0.0,
     cycle_profiles=False,
     seed=None,
+    graph_builder=None,
+    graph_writer=None,
 ):
     """
     Collect trajectories from the environment so the post-processing step can
     fit reliable trend vectors. Optional knobs randomise user requirements and
     slotframe exploration to widen the coverage of collected samples.
     """
+    if (graph_builder is None) != (graph_writer is None):
+        raise ValueError(
+            "graph_builder and graph_writer must be enabled together"
+        )
     # Collect per-cycle info dicts before building the final DataFrame.
     records = []
     rng = np.random.default_rng(seed)
@@ -190,6 +202,18 @@ def run(
                 increase = 1 if sf_size <= last_ts_in_schedule + 2 else 0
                 action = 0 if increase else 1
 
+        graph_before = None
+        if graph_writer is not None:
+            before_state = controller.get_state()
+            graph_before = graph_builder.build(
+                network=controller.network,
+                user_requirements=before_state["user_requirements"],
+                current_slotframe_size=before_state["current_sf_len"],
+                last_active_timeslot=before_state[
+                    "last_ts_in_schedule"
+                ],
+            )
+
         _, returned_reward, terminated, truncated, info = env.step(action)
         # Get last observations non normalized
         observations = controller.get_state()
@@ -225,6 +249,35 @@ def run(
             record["delta_weight"] = delta
             record["profile"] = profile_name(alpha, beta, delta)
         records.append(record)
+        if graph_writer is not None:
+            graph_after = graph_builder.build(
+                network=controller.network,
+                user_requirements=observations["user_requirements"],
+                current_slotframe_size=observations["current_sf_len"],
+                last_active_timeslot=observations[
+                    "last_ts_in_schedule"
+                ],
+            )
+            graph_writer.write_transition(
+                cycle_idx=cycle_idx,
+                action=action,
+                applied_action=record.get("applied_action"),
+                requested_sf_len=record.get("requested_sf_len"),
+                applied_sf_len=record.get(
+                    "applied_sf_len",
+                    record.get("current_sf_len"),
+                ),
+                returned_reward=returned_reward,
+                environment_reward=record.get("reward"),
+                profile=record.get("profile"),
+                terminated=terminated,
+                truncated=truncated,
+                wait_timeout=record["wait_timeout"],
+                wait_attempts=record.get("wait_attempts", 0),
+                valid_cycle=record["valid_cycle"],
+                before=graph_before,
+                after=graph_after,
+            )
         logger.info(
             "Cycle %d | sf_len=%d | reward=%.3f | power=%.3f | delay=%.3f | pdr=%.3f",
             cycle_idx,
@@ -423,6 +476,10 @@ def main():
     requirements_mode = os.environ.get("ELISE_REQUIREMENTS_MODE", "dirichlet")
     requirements_mode = (requirements_mode or "dirichlet").lower()
     cycle_profiles = _env_flag("ELISE_REQUIREMENTS_CYCLE", default=False)
+    record_graphs = _env_flag(
+        "ELISE_RECORD_GRAPH_TRANSITIONS",
+        default=False,
+    )
     seed = None
     seed_env = os.environ.get("ELISE_TREND_RANDOM_SEED")
     if seed_env is not None:
@@ -434,13 +491,14 @@ def main():
                 seed_env,
             )
     logger.info(
-        "Trend sampling | randomize_requirements=%s mode=%s refresh_every=%d exploration_prob=%.3f hold_prob=%.3f cycle_profiles=%s seed=%s",
+        "Trend sampling | randomize_requirements=%s mode=%s refresh_every=%d exploration_prob=%.3f hold_prob=%.3f cycle_profiles=%s record_graphs=%s seed=%s",
         randomize_requirements,
         requirements_mode,
         requirements_refresh_every,
         exploration_prob,
         hold_prob,
         cycle_profiles,
+        record_graphs,
         seed if seed is not None else "None",
     )
     config = SDWSNControllerConfig.from_json_file(CONFIG_FILE)
@@ -456,20 +514,49 @@ def main():
     with controller_class(config) as controller:
         # ----------------- Environment ----------------------------
         env = controller.reinforcement_learning.env
-        # --------------------Start RL --------------------------------
-        run(
-            env,
-            controller,
-            output_folder,
-            controller.simulation_name,
-            randomize_requirements=randomize_requirements,
-            requirements_mode=requirements_mode,
-            requirements_refresh_every=requirements_refresh_every,
-            exploration_prob=exploration_prob,
-            hold_prob=hold_prob,
-            cycle_profiles=cycle_profiles,
-            seed=seed,
-        )
+        run_kwargs = {
+            "randomize_requirements": randomize_requirements,
+            "requirements_mode": requirements_mode,
+            "requirements_refresh_every": requirements_refresh_every,
+            "exploration_prob": exploration_prob,
+            "hold_prob": hold_prob,
+            "cycle_profiles": cycle_profiles,
+            "seed": seed,
+        }
+        if record_graphs:
+            graph_builder = GraphObservationBuilder(
+                max_slotframe_size=config.tsch.max_slotframe,
+                energy_bounds=(
+                    config.performance_metrics.energy.min,
+                    config.performance_metrics.energy.max,
+                ),
+                delay_bounds=(
+                    config.performance_metrics.delay.min,
+                    config.performance_metrics.delay.max,
+                ),
+            )
+            with GraphTransitionDatasetWriter(
+                output_dir=output_folder,
+                seed=seed,
+                collection_metadata=graph_builder.normalization_metadata(),
+            ) as graph_writer:
+                run(
+                    env,
+                    controller,
+                    output_folder,
+                    controller.simulation_name,
+                    graph_builder=graph_builder,
+                    graph_writer=graph_writer,
+                    **run_kwargs,
+                )
+        else:
+            run(
+                env,
+                controller,
+                output_folder,
+                controller.simulation_name,
+                **run_kwargs,
+            )
 
         result_analysis(
             os.path.join(output_folder, controller.simulation_name + ".csv"),

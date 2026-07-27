@@ -22,6 +22,18 @@ class FakeNetwork:
         return max((node.tsch_last_ts() for node in self.nodes.values()), default=0)
 
 
+class TrackingLock:
+    def __init__(self):
+        self.entered = 0
+        self.exited = 0
+
+    def __enter__(self):
+        self.entered += 1
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.exited += 1
+
+
 class GraphObservationBuilderTest(unittest.TestCase):
     def setUp(self):
         self.network = FakeNetwork()
@@ -222,6 +234,18 @@ class GraphObservationBuilderTest(unittest.TestCase):
                     dtype=np.float32,
                 ),
             )
+
+    def test_uses_network_state_lock_for_atomic_snapshot(self):
+        state_lock = TrackingLock()
+        self.network.state_lock = state_lock
+
+        self.builder.build(
+            self.network,
+            user_requirements=(0.4, 0.3, 0.3),
+        )
+
+        self.assertEqual(state_lock.entered, 1)
+        self.assertEqual(state_lock.exited, 1)
 
 
 if __name__ == "__main__":

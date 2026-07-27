@@ -138,6 +138,20 @@ class GraphObservationBuilder:
         if len(bounds) != 2 or bounds[0] >= bounds[1]:
             raise ValueError(f"{name} must contain an increasing (min, max) pair")
 
+    def normalization_metadata(self) -> Dict[str, object]:
+        """Describe the normalization needed to interpret stored features."""
+        return {
+            "max_slotframe_size": self.max_slotframe_size,
+            "energy_bounds": list(self.energy_bounds),
+            "delay_bounds": list(self.delay_bounds),
+            "rssi_bounds": list(self.rssi_bounds),
+            "sink_id": self.sink_id,
+            "excluded_node_ids": sorted(self.excluded_node_ids),
+            "rank_unknown": self.RANK_UNKNOWN,
+            "rssi_unknown": self.RSSI_UNKNOWN,
+            "etx_divisor": self.ETX_DIVISOR,
+        }
+
     @staticmethod
     def _clip_unit(value: float) -> float:
         return float(np.clip(value, 0.0, 1.0))
@@ -158,7 +172,31 @@ class GraphObservationBuilder:
         current_slotframe_size: int | None = None,
         last_active_timeslot: int | None = None,
     ) -> GraphObservation:
-        """Create a deterministic graph snapshot from the current network."""
+        """Create an atomic graph snapshot when the network exposes a lock."""
+        state_lock = getattr(network, "state_lock", None)
+        if state_lock is None:
+            return self._build_snapshot(
+                network,
+                user_requirements,
+                current_slotframe_size,
+                last_active_timeslot,
+            )
+        with state_lock:
+            return self._build_snapshot(
+                network,
+                user_requirements,
+                current_slotframe_size,
+                last_active_timeslot,
+            )
+
+    def _build_snapshot(
+        self,
+        network: object,
+        user_requirements: Tuple[float, float, float],
+        current_slotframe_size: int | None = None,
+        last_active_timeslot: int | None = None,
+    ) -> GraphObservation:
+        """Create a deterministic graph snapshot while network state is stable."""
         requirements = np.asarray(user_requirements, dtype=np.float32)
         if requirements.shape != (3,) or not np.isfinite(requirements).all():
             raise ValueError("user_requirements must contain alpha, beta, and delta")

@@ -45,6 +45,7 @@ class Network:
         self.packet_dissector: PacketDissector = PacketDissector(
             network=self, config=config
         )
+        self.state_lock = threading.RLock()
         self.network_running: bool = False
         self.processing_window: int = processing_window
         self.stall_timeout: float = getattr(config.network, "stall_timeout", 60.0)
@@ -453,7 +454,8 @@ class Network:
                 try:
                     msg = self.socket.recv(0.1)
                     if len(msg) > 0:
-                        self.packet_dissector.handle_serial_packet(msg)
+                        with self.state_lock:
+                            self.packet_dissector.handle_serial_packet(msg)
                 except TypeError:
                     pass
                 if not self.network_running:
