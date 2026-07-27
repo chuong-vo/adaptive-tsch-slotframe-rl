@@ -7,6 +7,7 @@ from sdwsn_controller.reinforcement_learning.graph_observation import (
     EDGE_FEATURE_NAMES,
     GLOBAL_FEATURE_NAMES,
     NODE_FEATURE_NAMES,
+    GraphObservation,
     GraphObservationBuilder,
 )
 from sdwsn_controller.tsch.schedule import cell_type
@@ -201,6 +202,26 @@ class GraphObservationBuilderTest(unittest.TestCase):
         self.assertEqual(edge["etx_quality"], 0.0)
         self.assertEqual(edge["etx_available"], 0.0)
         self.assertTrue(np.isfinite(observation.edge_features).all())
+
+    def test_graph_observation_rejects_non_finite_features(self):
+        with self.assertRaisesRegex(ValueError, "finite"):
+            GraphObservation(
+                node_ids=np.asarray([1], dtype=np.int64),
+                node_features=np.full(
+                    (1, len(NODE_FEATURE_NAMES)),
+                    np.nan,
+                    dtype=np.float32,
+                ),
+                edge_index=np.empty((2, 0), dtype=np.int64),
+                edge_features=np.empty(
+                    (0, len(EDGE_FEATURE_NAMES)),
+                    dtype=np.float32,
+                ),
+                global_features=np.zeros(
+                    len(GLOBAL_FEATURE_NAMES),
+                    dtype=np.float32,
+                ),
+            )
 
 
 if __name__ == "__main__":

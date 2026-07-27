@@ -65,6 +65,8 @@ class GraphObservation:
             raise ValueError("node_features has an invalid shape")
         if self.node_features.dtype != np.float32:
             raise ValueError("node_features must use float32")
+        if not np.isfinite(self.node_features).all():
+            raise ValueError("node_features must contain only finite values")
         if (
             self.edge_index.dtype != np.int64
             or self.edge_index.ndim != 2
@@ -76,10 +78,14 @@ class GraphObservation:
             raise ValueError("edge_features has an invalid shape")
         if self.edge_features.dtype != np.float32:
             raise ValueError("edge_features must use float32")
+        if not np.isfinite(self.edge_features).all():
+            raise ValueError("edge_features must contain only finite values")
         if self.global_features.shape != (len(GLOBAL_FEATURE_NAMES),):
             raise ValueError("global_features has an invalid shape")
         if self.global_features.dtype != np.float32:
             raise ValueError("global_features must use float32")
+        if not np.isfinite(self.global_features).all():
+            raise ValueError("global_features must contain only finite values")
         if edge_count and (
             self.edge_index.min() < 0 or self.edge_index.max() >= node_count
         ):

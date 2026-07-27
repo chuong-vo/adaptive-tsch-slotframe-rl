@@ -1,8 +1,9 @@
 # GNN Observation Prototype
 
-This directory documents the isolated graph-observation prototype on the
+This directory documents the isolated GNN-PPO prototype on the
 `experiment/gnn-ppo` branch. It does not change the observation space, policy,
-training configuration, or results of the baseline PPO implementation.
+training configuration, or results of the baseline PPO implementation unless
+the graph wrapper and custom extractor are selected explicitly.
 
 ## Graph Definition
 
@@ -16,9 +17,13 @@ training configuration, or results of the baseline PPO implementation.
   used as learnable features.
 - Edges are sorted by source ID and then destination ID.
 
-The builder returns dynamic arrays instead of padding to the current ten-mote
-Cooja topology. A later batching layer can concatenate graphs and provide a
-batch vector without imposing a fixed network size.
+The framework-neutral builder returns dynamic arrays instead of assuming the
+current ten-mote Cooja topology.
+
+For Stable-Baselines3, `PaddedGraphObservationAdapter` converts this dynamic
+representation to a fixed-capacity dictionary. It adds `node_mask` and
+`edge_mask`, and raises an error on capacity overflow instead of truncating the
+graph. The default edge capacity is `max_nodes * max_nodes`.
 
 ## Feature Schema
 
@@ -82,9 +87,70 @@ are intentionally absent because the current Python controller does not expose
 them. They should only be added after instrumenting the Contiki-NG data plane
 and packet format.
 
+## GNN Feature Extractor
+
+`EdgeAwareGraphFeaturesExtractor` is a pure-PyTorch message-passing network:
+
+1. Encode node and edge features independently.
+2. Send edge-conditioned messages in the reported neighbor direction.
+3. Mean-aggregate incoming messages at each destination node.
+4. Update node states with residual connections and layer normalization.
+5. Apply masked mean and max pooling over nodes.
+6. Combine the pooled graph state with encoded global features.
+
+The output is a fixed-size vector consumed by the standard PPO actor and critic.
+The implementation is invariant to node ordering and ignores masked padding.
+It does not require PyTorch Geometric.
+
+## Stable-Baselines3 Integration
+
+For an environment backed by a live network:
+
+```python
+from stable_baselines3 import PPO
+
+from sdwsn_controller.reinforcement_learning.gnn_policy import (
+    EdgeAwareGraphFeaturesExtractor,
+)
+from sdwsn_controller.reinforcement_learning.graph_env import (
+    GraphObservationWrapper,
+)
+
+graph_env = GraphObservationWrapper(
+    controller.reinforcement_learning.env,
+    max_nodes=10,
+)
+model = PPO(
+    "MultiInputPolicy",
+    graph_env,
+    policy_kwargs={
+        "features_extractor_class": EdgeAwareGraphFeaturesExtractor,
+        "features_extractor_kwargs": {
+            "features_dim": 64,
+            "hidden_dim": 64,
+            "message_passing_steps": 2,
+        },
+    },
+)
+```
+
+`max_nodes=10` matches the current Cooja scenario. Increase it explicitly for a
+larger topology. Capacity overflow is treated as an error so that an experiment
+cannot silently lose nodes or edges.
+
 ## Current Boundary
 
-`GraphObservationBuilder` produces framework-neutral NumPy arrays. The next
-step is to add a GNN feature extractor and a Gymnasium-compatible observation
-space, then train it as an alternative policy. No PyTorch Geometric dependency
-is required for this first step.
+The existing numerical training environment only models aggregate energy,
+delay, and PDR as functions of slotframe size. It has no per-node topology,
+link metrics, routes, or schedules. Wrapping it with a fabricated constant
+graph would let code run but would not train a meaningful GNN.
+
+The next experimental step must therefore provide topology-aware training
+observations. The two valid approaches are:
+
+1. Collect graph snapshots from Cooja and train with a graph replay/surrogate
+   environment.
+2. Train online against Cooja, which is correct but substantially slower.
+
+This decision must be made before replacing the baseline model in the long-run
+evaluation.
