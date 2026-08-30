@@ -29,6 +29,7 @@ from sdwsn_controller.common import common
 from sdwsn_controller.node.node import Node
 from sdwsn_controller.packet.packet import Cell_Packet_Payload, RA_Packet_Payload
 from sdwsn_controller.packet.packet_dissector import PacketDissector
+from sdwsn_controller.exceptions import PacketEncodingError
 
 
 logger = logging.getLogger(f"main.{__name__}")
@@ -48,6 +49,10 @@ class Network:
         self.network_running: bool = False
         self.processing_window: int = processing_window
         self.stall_timeout: float = getattr(config.network, "stall_timeout", 60.0)
+        self.control_flood_repetitions: int = max(
+            1, int(getattr(config.network, "control_flood_repetitions", 1))
+        )
+        self.control_sequence: int = 0
         self.read_socket_thread: Optional[threading.Thread] = None
         self.tsch_slotframe_size: int = 0
         self.tsch_max_ch: int = tsch_max_ch
@@ -76,6 +81,7 @@ class Network:
         self.packet_dissector.ack_pkt = None
         self.packet_dissector.cycle_sequence = 0
         self.packet_dissector.sequence = 0
+        self.control_sequence = 0
 
     def nodes_size(self) -> int:
         return len(self.nodes)
@@ -193,11 +199,14 @@ class Network:
         return sent == num_pkts
 
     def send_routing_packet(self, payload):
-        packed_data, serial_pkt = common.routing_build_pkt(
-            payload, self.cycle_sequence_increase()
-        )
-        # Send NC packet
-        return self.reliable_send(packed_data, serial_pkt.reserved0 + 1)
+        delivered = 0
+        for _ in range(self.control_flood_repetitions):
+            packed_data, serial_pkt = common.routing_build_pkt(
+                payload, self.control_sequence_increase()
+            )
+            if self.reliable_send(packed_data, serial_pkt.reserved0 + 1):
+                delivered += 1
+        return delivered > 0
 
     # ---------------------------------------------------------------------------
     def cycle_sequence(self) -> int:
@@ -210,6 +219,10 @@ class Network:
         self.packet_dissector.sequence = 0
         self.nodes_performance_metrics_clear()
         return cycle_seq
+
+    def control_sequence_increase(self) -> int:
+        self.control_sequence += 1
+        return self.control_sequence
 
     # ---------------------------------------------------------------------------
 
@@ -285,7 +298,20 @@ class Network:
         return routes
 
     def tsch_sendall(self):
+        if not 1 <= int(self.tsch_slotframe_size) <= 255:
+            raise PacketEncodingError(
+                "TSCH slotframe must be in the wire-format range [1, 255]: "
+                f"{self.tsch_slotframe_size}"
+            )
+        for node_id, schedules in self.tsch_schedules().items():
+            for schedule in schedules.values():
+                if not 0 <= int(schedule.ts) <= 255:
+                    raise PacketEncodingError(
+                        f"Node {node_id} timeslot is outside [0, 255]: "
+                        f"{schedule.ts}"
+                    )
         logger.debug(f"Sending all schedules (SF: {self.tsch_slotframe_size})")
+        cycle_seq = self.cycle_sequence_increase()
         sent = 0
         num_pkts = 0
         payload = None
@@ -310,9 +336,7 @@ class Network:
                         f"Sending TSCH packet {num_pkts} with {len(payload)} bytes"
                     )
                     # We send the current payload
-                    current_sf_size = self.tsch_slotframe_size if num_pkts == 1 else 0
-                    # We send the current payload
-                    if self.send_tsch_packet(cell_packed, current_sf_size):
+                    if self.send_tsch_packet(cell_packed, 0, cycle_seq):
                         sent += 1
                     payload = None
                 else:
@@ -321,19 +345,31 @@ class Network:
         if payload:
             num_pkts += 1
             logger.debug(f"Sending TSCH packet {num_pkts} with {len(payload)} bytes")
-            current_sf_size = self.tsch_slotframe_size if num_pkts == 1 else 0
-            if self.send_tsch_packet(payload, current_sf_size):
+            if self.send_tsch_packet(payload, 0, cycle_seq):
                 sent += 1
-        # Update stats
-        self.stats_tsch_pkt_sent += num_pkts
-        return sent == num_pkts
-
-    def send_tsch_packet(self, payload, sf):
-        packed_data, serial_pkt = common.tsch_build_pkt(
-            payload, sf, self.cycle_sequence_increase()
+        marker_sent = self.send_tsch_packet(
+            b"", self.tsch_slotframe_size, cycle_seq
         )
-        # Send NC packet
-        return self.reliable_send(packed_data, serial_pkt.reserved0 + 1)
+        # Update stats
+        self.stats_tsch_pkt_sent += num_pkts + 1
+        return sent == num_pkts and marker_sent
+
+    def send_tsch_cycle_marker(self):
+        cycle_seq = self.cycle_sequence_increase()
+        return self.send_tsch_packet(b"", 0, cycle_seq)
+
+    def send_tsch_packet(self, payload, sf, cycle_seq):
+        delivered = 0
+        for _ in range(self.control_flood_repetitions):
+            packed_data, serial_pkt = common.tsch_build_pkt(
+                payload,
+                sf,
+                self.control_sequence_increase(),
+                cycle_seq=cycle_seq,
+            )
+            if self.reliable_send(packed_data, serial_pkt.reserved0 + 1):
+                delivered += 1
+        return delivered > 0
 
     # --------------------------------------------------------------------
 
@@ -424,6 +460,9 @@ class Network:
             # Packet dissector not available
             return False
 
+        # Do not let an old serial ACK satisfy a later control transmission.
+        self.packet_dissector.ack_pkt = None
+
         # Reliable socket data transmission
         rtx_limit = 7
         ack_received = False
@@ -511,9 +550,12 @@ class Network:
 
     def start(self):
         self.reset_runtime_state()
+        # The reader may return from its first short socket timeout before
+        # start_socket() returns. Mark the network active before spawning it.
+        self.network_running = True
         # Start the socket interface
         sock = self.start_socket()
         if not sock:
+            self.network_running = False
             self.stop()
             return
-        self.network_running = True

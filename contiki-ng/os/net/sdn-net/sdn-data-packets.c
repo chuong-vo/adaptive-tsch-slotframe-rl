@@ -90,6 +90,7 @@ struct timer data_timer_send; /**< ND timer, to schedule ND sending */
 static uint32_t rand_time;    /**< random time value for timers */
 static uint16_t cycle_seq = 0;
 static uint8_t seq = 0;
+static uint8_t data_plane_ready = 0;
 #endif
 
 /*---------------------------------------------------------------------------*/
@@ -97,7 +98,7 @@ void sdn_data_init(void)
 {
 #if !BUILD_WITH_SDN_CONTROLLER_SERIAL
     etimer_set(&data_timer_periodic, SDN_DATA_PERIOD);
-    timer_set(&data_timer_send, CLOCK_SECOND * 2); /* wait to have a link local IP address */
+    timer_set(&data_timer_send, CLOCK_SECOND);
 #endif
     return;
 }
@@ -107,6 +108,19 @@ void sdn_data_reset_seq(uint16_t new_cycle_seq)
 {
     cycle_seq = new_cycle_seq;
     seq = 0;
+}
+/*---------------------------------------------------------------------------*/
+void sdn_data_pause(void)
+{
+    data_plane_ready = 0;
+}
+/*---------------------------------------------------------------------------*/
+void sdn_data_resume(void)
+{
+    uint32_t interval = SDN_DATA_PACKET_INTERVAL * CLOCK_SECOND;
+    uint32_t jitter_time = random_rand() % CLOCK_SECOND;
+    data_plane_ready = 1;
+    timer_set(&data_timer_send, interval + jitter_time);
 }
 #endif
 /*---------------------------------------------------------------------------*/
@@ -166,7 +180,7 @@ static void send_data_output(void)
         //     SDN_STAT(++sdn_stat.data.sent_agg);
         //     SDN_STAT(sdn_stat.data.sent_agg_bytes += sdn_len);
         // }
-        LOG_INFO("Sending Data pkt (SEQ: %d).\n", seq);
+        LOG_INFO("TX_DATA cycle=%u seq=%u\n", cycle_seq, seq);
 
         print_buff(sdn_buf, sdn_len, true);
 
@@ -196,7 +210,14 @@ void sdn_data_periodic(void)
 #if !BUILD_WITH_SDN_CONTROLLER_SERIAL
     if (timer_expired(&data_timer_send) /* && (sdn_len == 0) */)
     {
-        sdn_send_nd_periodic();
+        if (data_plane_ready)
+        {
+            sdn_send_nd_periodic();
+        }
+        else
+        {
+            timer_set(&data_timer_send, CLOCK_SECOND);
+        }
     }
     etimer_reset(&data_timer_periodic);
 #endif

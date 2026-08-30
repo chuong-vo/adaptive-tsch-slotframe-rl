@@ -1,0 +1,85 @@
+{
+  "protocol_version": "expanded-v1",
+  "dataset_group": "EXPANDED",
+  "template_csc": "contiki-ng/examples/elise/cooja-elise.csc",
+  "topology": {
+    "families": ["chain", "grid", "random_geometric"],
+    "transmission_range": 50.0,
+    "interference_range": 100.0,
+    "chain_spacing": 38.0,
+    "grid_spacing": 35.0,
+    "jitter": 3.0,
+    "random_target_degree": 8.0,
+    "random_min_node_connectivity": 2,
+    "random_max_route_edge_fraction": 0.85,
+    "random_max_rerolls": 100,
+    "splits": [
+      {
+        "name": "train",
+        "node_counts": [8, 10, 12, 16, 20],
+        "layout_instances": 1,
+        "sink_placements": ["center", "edge"]
+      },
+      {
+        "name": "validation",
+        "node_counts": [8, 10, 12, 16, 20],
+        "layout_instances": 1,
+        "sink_placements": ["alternate"]
+      },
+      {
+        "name": "test_interpolation",
+        "node_counts": [14, 18],
+        "layout_instances": 1,
+        "sink_placements": ["alternate"]
+      },
+      {
+        "name": "test_scale",
+        "node_counts": [25, 32],
+        "layout_instances": 1,
+        "sink_placements": ["alternate"]
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "profile_id": "normal",
+      "traffic_mode": "normal_periodic",
+      "app_interval_seconds": 40,
+      "success_ratio_tx": 1.0,
+      "success_ratio_rx": 1.0
+    },
+    {
+      "profile_id": "stress",
+      "traffic_mode": "elevated_load",
+      "app_interval_seconds": 10,
+      "success_ratio_tx": 1.0,
+      "success_ratio_rx": 1.0
+    }
+  ],
+  "slotframe": {
+    "candidate_count": 15,
+    "ratio_min": 1.0,
+    "ratio_max": 4.0,
+    "min_gap_fraction": 0.05,
+    "coprime_with": [397, 31, 27],
+    "wire_maximum": 255
+  },
+  "collection": {
+    "cooja_seeds": [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010],
+    "warmup_cycles": 2,
+    "accepted_cycles": 8,
+    "max_attempts_per_cycle": 5,
+    "processing_window_per_node": 40,
+    "control_flood_repetitions": 3,
+    "discovery_stability_seconds": 3.0,
+    "stall_timeout_seconds": 30.0,
+    "startup_timeout_seconds": 300,
+    "port_release_timeout_seconds": 120.0,
+    "port": 60001
+  },
+  "controller": {
+    "max_channel": 16,
+    "slot_duration_ms": 10,
+    "reward_profile": [0.4, 0.3, 0.3]
+  }
+}

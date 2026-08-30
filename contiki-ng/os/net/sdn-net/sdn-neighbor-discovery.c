@@ -87,6 +87,7 @@ sdn_rank_t my_rank; // Holds the rank value and the total rssi value to the cont
 struct etimer nd_timer_periodic;
 struct timer nd_timer_send; /**< ND timer, to schedule ND sending */
 static uint32_t rand_time;  /**< random time value for timers */
+static uint8_t nd_enabled = 1;
 
 /*---------------------------------------------------------------------------*/
 #if SDN_DS_NBR_NOTIFICATIONS
@@ -100,6 +101,16 @@ neighbor_callback(int event, const sdn_ds_nbr_t *nbr)
                  nbr->addr.u8[0], nbr->addr.u8[1]);
         if (linkaddr_cmp(&my_rank.addr, &nbr->addr))
         {
+#if defined(SDN_CONF_FIXED_TOPOLOGY) && SDN_CONF_FIXED_TOPOLOGY
+            /* A parent that already received RA stops sending ND. In a fixed
+             * topology, keep that valid bootstrap path until this node also
+             * receives RA instead of selecting a downstream node as parent. */
+            if (nd_enabled)
+            {
+                LOG_INFO("retaining bootstrap parent until route installation\n");
+                return;
+            }
+#endif
             LOG_INFO("removing gtw to ctrl\n");
             my_rank.rank = 0xff;
             my_rank.rssi = 0;
@@ -134,8 +145,15 @@ static void update_rank(int16_t rssi, uint8_t rank, const linkaddr_t *from)
 /*---------------------------------------------------------------------------*/
 void sdn_nd_init(void)
 {
+    uint32_t phase_window;
+    uint32_t node_phase;
     etimer_set(&nd_timer_periodic, SDN_ND_PERIOD);
-    timer_set(&nd_timer_send, 2); /* wait to have a link local IP address */
+    phase_window = SDN_MAX_ND_INTERVAL * CLOCK_SECOND;
+    node_phase = ((uint32_t)linkaddr_node_addr.u8[0] * CLOCK_SECOND) %
+                 phase_window;
+    timer_set(
+        &nd_timer_send,
+        (2 * CLOCK_SECOND) + node_phase + (random_rand() % CLOCK_SECOND));
 #if !(SDN_CONTROLLER || BUILD_WITH_SDN_CONTROLLER_SERIAL)
     my_rank.rank = 0xff; /* Sensor node */
     my_rank.rssi = 0x00;
@@ -152,11 +170,20 @@ void sdn_nd_init(void)
     return;
 }
 /*---------------------------------------------------------------------------*/
+void sdn_nd_pause(void)
+{
+    nd_enabled = 0;
+}
+/*---------------------------------------------------------------------------*/
 void sdn_nd_input(void)
 {
     int16_t ndRank, ndRssi, rssi;
     const struct link_stats *stats;
     const linkaddr_t *addr;
+    if (!nd_enabled)
+    {
+        return;
+    }
     addr = packetbuf_addr(PACKETBUF_ADDR_SENDER);
     // We get the ETX, RSSI values from link-stats.c
     stats = link_stats_from_lladdr(addr);
@@ -263,11 +290,18 @@ static void send_nd_output(void)
 /*---------------------------------------------------------------------------*/
 static void sdn_send_nd_periodic(void)
 {
+    uint32_t minimum_interval;
+    uint32_t jitter_window;
     send_nd_output();
     LOG_INFO("sending ND message.\n");
-    uint32_t interval =  SDN_MAX_ND_INTERVAL * CLOCK_SECOND;
-    uint32_t jitter_time = random_rand() % (CLOCK_SECOND);
-    rand_time = interval + jitter_time;
+    minimum_interval = SDN_MIN_ND_INTERVAL * CLOCK_SECOND;
+    jitter_window = (SDN_MAX_ND_INTERVAL - SDN_MIN_ND_INTERVAL) *
+                    CLOCK_SECOND;
+    rand_time = minimum_interval;
+    if (jitter_window > 0)
+    {
+        rand_time += random_rand() % jitter_window;
+    }
     // LOG_INFO("Random time 1 = %lu\n", rand_time);
     timer_set(&nd_timer_send, rand_time);
 }
@@ -278,7 +312,14 @@ void sdn_nd_periodic(void)
     // LOG_INFO("periodic.\n");
     if (timer_expired(&nd_timer_send) /* && (sdn_len == 0) */)
     {
-        sdn_send_nd_periodic();
+        if (nd_enabled)
+        {
+            sdn_send_nd_periodic();
+        }
+        else
+        {
+            timer_set(&nd_timer_send, CLOCK_SECOND);
+        }
     }
     etimer_reset(&nd_timer_periodic);
 }

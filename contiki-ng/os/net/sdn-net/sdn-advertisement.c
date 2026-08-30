@@ -161,7 +161,14 @@ void sdn_na_init(void)
 {
     etimer_set(&na_timer_periodic, SDN_NA_PERIOD);
 #if !BUILD_WITH_SDN_CONTROLLER_SERIAL
-    timer_set(&na_timer_send, 2); /* wait to have a link local IP address */
+    uint32_t phase_window;
+    uint32_t node_phase;
+    phase_window = SDN_MAX_NA_INTERVAL * CLOCK_SECOND;
+    node_phase = ((uint32_t)linkaddr_node_addr.u8[0] * CLOCK_SECOND) %
+                 phase_window;
+    timer_set(
+        &na_timer_send,
+        (2 * CLOCK_SECOND) + node_phase + (random_rand() % CLOCK_SECOND));
 #endif
 /* callback function when neighbor removed */
 #if SDN_DS_NBR_NOTIFICATIONS
@@ -251,14 +258,21 @@ void sdn_na_reset_seq(uint16_t new_cycle_seq)
 #if !BUILD_WITH_SDN_CONTROLLER_SERIAL
 static void sdn_send_na_periodic(void)
 {
+    uint32_t minimum_interval;
+    uint32_t jitter_window;
     // if (send_advertisement)
     // {
     send_na_output();
     // send_advertisement = 0;
     // }
-    uint32_t interval =  SDN_MAX_NA_INTERVAL * CLOCK_SECOND;
-    uint32_t jitter_time = random_rand() % (CLOCK_SECOND);
-    rand_time = interval + jitter_time;
+    minimum_interval = SDN_MIN_NA_INTERVAL * CLOCK_SECOND;
+    jitter_window = (SDN_MAX_NA_INTERVAL - SDN_MIN_NA_INTERVAL) *
+                    CLOCK_SECOND;
+    rand_time = minimum_interval;
+    if (jitter_window > 0)
+    {
+        rand_time += random_rand() % jitter_window;
+    }
     // LOG_INFO("Random time = %lu\n", rand_time);
     timer_set(&na_timer_send, rand_time);
 }

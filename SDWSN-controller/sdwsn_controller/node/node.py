@@ -50,6 +50,7 @@ class Node():
         self.pdr = PDRSamples(self)
         self.rank = rank
         self.cycle_seq = cycle_seq
+        self.na_report_count = 0
         self.reset_stats()
 
     # ---------------------------------------------------------------------------

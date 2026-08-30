@@ -72,19 +72,25 @@ Default channel size is 31. We use 4 timeslot for operation of the control plane
 //     {28, 0},
 // };
 
-static uint8_t rx_timeoffset = 0;
-static uint8_t rx_channeloffset = 0;
-static uint8_t tx_timeoffset = 0;
-static uint8_t tx_channeloffset = 0;
+/* One rank layer has 16 collision-separated cells. For node IDs below 50,
+ * (timeslot colour, channel colour) is unique within a stable rank. Wrap
+ * transient discovery ranks so every bootstrap link remains schedulable. */
+#define CONTROL_LAYER_WIDTH 16
+static uint16_t rx_timeoffset = 0;
+static uint16_t rx_channeloffset = 0;
+static uint16_t tx_timeoffset = 0;
+static uint16_t tx_channeloffset = 0;
 static uint8_t rank_set = 0;
 static linkaddr_t parent;
 static struct tsch_slotframe *sf_control;
 /*---------------------------------------------------------------------------*/
 static uint16_t
-get_node_timeslot(const uint8_t rank)
+get_node_timeslot(const uint8_t rank, const linkaddr_t *transmitter)
 {
 #if ORCHESTRA_CONTROL_PERIOD > 0
-  return rank % ORCHESTRA_CONTROL_PERIOD;
+  return (((uint16_t)rank * CONTROL_LAYER_WIDTH) +
+          (ORCHESTRA_LINKADDR_HASH(transmitter) % CONTROL_LAYER_WIDTH)) %
+         ORCHESTRA_CONTROL_PERIOD;
 #else
   return 0xffff;
 #endif
@@ -95,7 +101,10 @@ get_node_channel_offset(const linkaddr_t *addr)
 {
   if (addr != NULL && ORCHESTRA_UNICAST_MAX_CHANNEL_OFFSET >= ORCHESTRA_UNICAST_MIN_CHANNEL_OFFSET)
   {
-    return ORCHESTRA_LINKADDR_HASH(addr) % (ORCHESTRA_UNICAST_MAX_CHANNEL_OFFSET - ORCHESTRA_UNICAST_MIN_CHANNEL_OFFSET + 1) + ORCHESTRA_UNICAST_MIN_CHANNEL_OFFSET;
+    uint16_t span = ORCHESTRA_UNICAST_MAX_CHANNEL_OFFSET -
+                    ORCHESTRA_UNICAST_MIN_CHANNEL_OFFSET + 1;
+    return (ORCHESTRA_LINKADDR_HASH(addr) / CONTROL_LAYER_WIDTH) % span +
+           ORCHESTRA_UNICAST_MIN_CHANNEL_OFFSET;
   }
   else
   {
@@ -131,9 +140,10 @@ init(uint16_t sf_handle)
   /* Default slotframe: for broadcast or unicast to neighbors we
    * do not have a link to */
   sf_control = tsch_schedule_add_slotframe(slotframe_handle, ORCHESTRA_CONTROL_PERIOD);
-  tx_timeoffset = 1;
-  rx_channeloffset = 3;
-  tx_channeloffset = 3;
+  rx_timeoffset = get_node_timeslot(0, &linkaddr_node_addr);
+  tx_timeoffset = get_node_timeslot(1, &linkaddr_node_addr);
+  rx_channeloffset = get_node_channel_offset(&linkaddr_node_addr);
+  tx_channeloffset = rx_channeloffset;
   tsch_schedule_add_link(sf_control,
                          LINK_OPTION_RX,
                          ORCHESTRA_COMMON_SHARED_TYPE, &tsch_broadcast_address,
@@ -142,7 +152,6 @@ init(uint16_t sf_handle)
                          LINK_OPTION_TX,
                          ORCHESTRA_COMMON_SHARED_TYPE, &tsch_broadcast_address,
                          tx_timeoffset, tx_channeloffset, 1);
-
   linkaddr_copy(&parent, &linkaddr_node_addr);
 }
 /*---------------------------------------------------------------------------*/
@@ -153,24 +162,25 @@ static void rank_updated(const linkaddr_t *addr, uint8_t rank)
     return;
   }
   linkaddr_copy(&parent, addr);
-  /* Update the listening timeslot, which is based on the hop position */
-  if (tsch_schedule_remove_link_by_timeslot(sf_control, rx_timeoffset, rx_channeloffset) &&
-      (tsch_schedule_remove_link_by_timeslot(sf_control, tx_timeoffset, tx_channeloffset)))
-  {
-    rx_timeoffset = get_node_timeslot(rank);
-    rx_channeloffset = get_node_channel_offset(addr);
-    tsch_schedule_add_link(sf_control,
-                           LINK_OPTION_RX,
-                           ORCHESTRA_COMMON_SHARED_TYPE, &tsch_broadcast_address,
-                           rx_timeoffset, rx_channeloffset, 1);
-    tx_timeoffset = get_node_timeslot(rank + 1);
-    tx_channeloffset = get_node_channel_offset(&linkaddr_node_addr);
-    tsch_schedule_add_link(sf_control,
-                           LINK_OPTION_TX,
-                           LINK_TYPE_NORMAL, &tsch_broadcast_address,
-                           tx_timeoffset, tx_channeloffset, 1);
-    rank_set = rank;
-  }
+  /* The child listens in its parent's unique cell, then forwards in its own
+   * cell in the next rank layer. */
+  tsch_schedule_remove_link_by_timeslot(sf_control, rx_timeoffset, rx_channeloffset);
+  tsch_schedule_remove_link_by_timeslot(sf_control, tx_timeoffset, tx_channeloffset);
+
+  rx_timeoffset = get_node_timeslot(rank, addr);
+  rx_channeloffset = get_node_channel_offset(addr);
+  tx_timeoffset = get_node_timeslot(rank + 1, &linkaddr_node_addr);
+  tx_channeloffset = get_node_channel_offset(&linkaddr_node_addr);
+
+  tsch_schedule_add_link(sf_control,
+                         LINK_OPTION_RX,
+                         ORCHESTRA_COMMON_SHARED_TYPE, &tsch_broadcast_address,
+                         rx_timeoffset, rx_channeloffset, 1);
+  tsch_schedule_add_link(sf_control,
+                         LINK_OPTION_TX,
+                         LINK_TYPE_NORMAL, &tsch_broadcast_address,
+                         tx_timeoffset, tx_channeloffset, 1);
+  rank_set = rank;
 }
 /*---------------------------------------------------------------------------*/
 struct orchestra_rule control_plane = {

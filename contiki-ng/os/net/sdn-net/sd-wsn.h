@@ -56,7 +56,7 @@
 #define SDN_NAPL_LEN 6 /* Size of neighbor advertisement payload size */
 #define SDN_RAH_LEN 6  /* Size of network configuration routing and schedules packet header */
 #define SDN_RAPL_LEN 6 /* Size of RA payload */
-#define SDN_SAH_LEN 6  /* Size of Schedule advertisement (SA) header */
+#define SDN_SAH_LEN 8  /* Size of Schedule advertisement (SA) header */
 #define SDN_SAPL_LEN 8 /* Size of SA payload */
 // #define SDN_DATAH_LEN 1 /* Size of data header*/
 #define SDN_DATA_LEN 11 /* Size of data packet */
@@ -501,6 +501,7 @@ struct sdn_sa_hdr
     uint8_t payload_len,
         sf_len;
     uint16_t seq,
+        cycle_seq,
         pkt_chksum;
 };
 

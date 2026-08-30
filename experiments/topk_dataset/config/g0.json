@@ -1,0 +1,44 @@
+{
+  "protocol_version": "g0-v1",
+  "dataset_group": "G0",
+  "split": "reference",
+  "topology": {
+    "family": "thesis_fixed_grid",
+    "template_csc": "contiki-ng/examples/elise/cooja-elise.csc",
+    "sink_id": 1,
+    "expected_node_count": 10,
+    "topology_seed": 0
+  },
+  "radio": {
+    "model": "UDGM",
+    "transmission_range": 50.0,
+    "interference_range": 100.0,
+    "success_ratio_tx": 0.95,
+    "success_ratio_rx": 0.95
+  },
+  "traffic": {
+    "mode": "normal_periodic",
+    "app_interval_ms": 40000
+  },
+  "slotframe": {
+    "minimum": 10,
+    "maximum": 68,
+    "wire_maximum": 255,
+    "coprime_with": [397, 31, 27]
+  },
+  "collection": {
+    "cooja_seeds": [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010],
+    "warmup_cycles": 2,
+    "accepted_cycles": 8,
+    "max_attempts_per_cycle": 5,
+    "processing_window": 400,
+    "stall_timeout_seconds": 30.0,
+    "startup_timeout_seconds": 300,
+    "port": 60001
+  },
+  "controller": {
+    "max_channel": 16,
+    "slot_duration_ms": 10,
+    "reward_profile": [0.4, 0.3, 0.3]
+  }
+}

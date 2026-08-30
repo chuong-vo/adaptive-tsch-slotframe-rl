@@ -17,9 +17,49 @@
 from sdwsn_controller.tsch.scheduler import TSCHScheduler
 import random
 from sdwsn_controller.tsch.schedule import cell_type
+from sdwsn_controller.exceptions import SchedulingInfeasibleError
 import logging
+import hashlib
+import json
 
 logger = logging.getLogger(f'main.{__name__}')
+
+
+def routing_links(path):
+    """Return each directed routing-tree link exactly once."""
+    links = set()
+    for node_path in path.values():
+        for index in range(len(node_path) - 1):
+            links.add((int(node_path[index]), int(node_path[index + 1])))
+    return sorted(links)
+
+
+def deterministic_cells(path, schedule_seed, max_channels):
+    """Build a schedule that is stable across slotframe candidates."""
+    if max_channels < 1:
+        raise SchedulingInfeasibleError("At least one TSCH channel is required")
+
+    links = routing_links(path)
+    rng = random.Random(int(schedule_seed))
+    rng.shuffle(links)
+    cells = []
+    for timeslot, (tx, rx) in enumerate(links):
+        cells.append({
+            "tx": tx,
+            "rx": rx,
+            "timeslot": timeslot,
+            "channel": rng.randrange(max_channels),
+        })
+    return cells
+
+
+def schedule_sha256(cells):
+    canonical = json.dumps(
+        sorted(cells, key=lambda cell: (cell["timeslot"], cell["tx"], cell["rx"])),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 class ContentionFreeScheduler(TSCHScheduler):
@@ -36,41 +76,57 @@ class ContentionFreeScheduler(TSCHScheduler):
     def name(self):
         return self.__name
 
-    def run(self, path, current_sf_size):
+    def run(self, path, current_sf_size, schedule_seed=None, deterministic=False):
         logger.debug(
             f"running contention free scheduler for sf size {current_sf_size}")
         self.network.tsch_clear()
         self.network.tsch_slotframe_size = current_sf_size
-        for _, p in path.items():
-            if (len(p) >= 2):
-                logger.debug(f"add uc for {p}")
-                for i in range(len(p)-1):
-                    # Tx node
-                    tx_node = self.network.nodes_add(p[i])
-                    # Rx node
-                    rx_node = self.network.nodes_add(p[i+1])
-                    logger.debug(f'link {tx_node.id}-{rx_node.id}')
-                    # We first check whether the Tx-Rx link already exists.
-                    if not self.network.tsch_link_exists(tx_node, rx_node):
-                        logger.debug(
-                            f'link {tx_node.id}-{rx_node.id} does not exists')
-                        # Random Tx link to RX if it is available
-                        ts = random.randrange(0,
-                                              current_sf_size-1)
-                        ch = random.randrange(0,
-                                              self.network.tsch_max_ch-1)
-                        # Let's first check whether this timeslot is already in use in the schedule
-                        while (not self.network.tsch_timeslot_free(ts)):
-                            logger.debug(
-                                f"ts {ts} already in use")
-                            ts = random.randrange(0, current_sf_size-1)
-                        # We have found an empty timeslot
-                        logger.debug(
-                            f'empty time slot {ts} found for {tx_node.id}-{rx_node.id}')
-                        # Schedule Tx
-                        tx_node.tsch_add_link(
-                            cell_type.UC_TX, ch, ts, rx_node.id)
-                        # Schedule Rx
-                        rx_node.tsch_add_link(cell_type.UC_RX, ch, ts)
+        if deterministic or schedule_seed is not None:
+            cells = deterministic_cells(
+                path,
+                0 if schedule_seed is None else schedule_seed,
+                self.network.tsch_max_ch,
+            )
+            if len(cells) > current_sf_size:
+                raise SchedulingInfeasibleError(
+                    f"{len(cells)} routing links do not fit in slotframe "
+                    f"{current_sf_size}"
+                )
+            for cell in cells:
+                tx_node = self.network.nodes_add(cell["tx"])
+                rx_node = self.network.nodes_add(cell["rx"])
+                tx_node.tsch_add_link(
+                    cell_type.UC_TX,
+                    cell["channel"],
+                    cell["timeslot"],
+                    rx_node.id,
+                )
+                rx_node.tsch_add_link(
+                    cell_type.UC_RX,
+                    cell["channel"],
+                    cell["timeslot"],
+                )
+            self.network.tsch_print()
+            return cells
+
+        links = routing_links(path)
+        # Keep the legacy convention of leaving the last offset unused, but
+        # allocate from a finite pool so an infeasible request cannot spin.
+        available_timeslots = list(range(max(0, int(current_sf_size) - 1)))
+        if len(links) > len(available_timeslots):
+            raise SchedulingInfeasibleError(
+                f"{len(links)} routing links do not fit in the legacy "
+                f"slotframe allocation of size {current_sf_size}"
+            )
+        if self.network.tsch_max_ch < 1:
+            raise SchedulingInfeasibleError("At least one TSCH channel is required")
+        random.shuffle(available_timeslots)
+        for (tx_id, rx_id), ts in zip(links, available_timeslots):
+            tx_node = self.network.nodes_add(tx_id)
+            rx_node = self.network.nodes_add(rx_id)
+            ch = random.randrange(self.network.tsch_max_ch)
+            tx_node.tsch_add_link(cell_type.UC_TX, ch, ts, rx_node.id)
+            rx_node.tsch_add_link(cell_type.UC_RX, ch, ts)
         # Print the schedule
         self.network.tsch_print()
+        return None

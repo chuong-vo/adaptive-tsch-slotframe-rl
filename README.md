@@ -46,6 +46,13 @@ no `git submodule update` step is required.
 5. [Collect and fit trend data](#6-stage-1-collect-trend-data)
 6. [Train PPO](#8-stage-2-train-the-ppo-policy)
 7. [Run and analyze long-run evaluation](#9-stage-3-long-run-evaluation)
+8. [Collect the Top-K dataset](#top-k-dataset-collection)
+
+## Top-K Dataset Collection
+
+The immutable G0 baseline and the fixed multi-topology Top-K dataset collector
+are documented in `experiments/topk_dataset/README.md`. Start with the relevant
+`--prepare-only` and `--smoke` commands before launching a full matrix.
 
 ## Tested Environment
 

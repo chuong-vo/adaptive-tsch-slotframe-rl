@@ -76,6 +76,7 @@ class PacketDissector():
                 logger.debug(f"num seq (NA): {self.sequence}")
                 node = self.network.nodes_add(
                     pkt.scr, cycle_seq=na_pkt.cycle_seq, rank=na_pkt.rank)
+                node.na_report_count += 1
                 node.energy_add(na_pkt.seq, na_pkt.energy)
                 # Process neighbors
                 blocks = len(na_pkt.payload) // SDN_NAPL_LEN

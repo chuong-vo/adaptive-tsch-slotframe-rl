@@ -16,6 +16,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import struct
+
+from sdwsn_controller.exceptions import PacketEncodingError
 import types
 import json
 
@@ -26,7 +28,7 @@ SDN_NAH_LEN = 10   # Size of neighbor advertisement packet header */
 SDN_NAPL_LEN = 6  # Size of neighbor advertisement payload size */
 # SDN_NCH_LEN = 6   # Size of network configuration routing and schedules packet header */
 SDN_RAH_LEN = 6  # Size of RA header routing packet*/
-SDN_SAH_LEN = 6  # Size of SA header schedule packet*/
+SDN_SAH_LEN = 8  # Size of SA header schedule packet*/
 SDN_DATA_LEN = 11  # Size of data packet */
 SDN_SERIAL_PACKETH_LEN = 8
 
@@ -41,6 +43,18 @@ sdn_protocols.SDN_PROTO_NA = 2        # Neighbor advertisement
 sdn_protocols.SDN_PROTO_RA = 3        # Routes Advertisement
 sdn_protocols.SDN_PROTO_SA = 4        # Schedule Advertisement
 sdn_protocols.SDN_PROTO_DATA = 5      # Data packet
+
+
+def _require_uint8(name, value):
+    try:
+        value = int(value)
+    except (TypeError, ValueError) as exc:
+        raise PacketEncodingError(f"{name} must be an integer") from exc
+    if not 0 <= value <= 255:
+        raise PacketEncodingError(
+            f"{name}={value} cannot be encoded as an unsigned byte"
+        )
+    return value
 
 
 def chksum(sum, data, len):
@@ -242,21 +256,28 @@ class Cell_Packet:
         self.payload_len = kwargs.get("payload_len", 0)
         self.sf_len = kwargs.get("sf_len", 0)
         self.seq = kwargs.get("seq", 0)
+        self.cycle_seq = kwargs.get("cycle_seq", self.seq)
         self.pkt_chksum = kwargs.get("pkt_chksum", 0)
         self.payload = payload
 
     def pack(self):
+        self.payload_len = _require_uint8("payload_len", self.payload_len)
+        # A zero slotframe is the existing continuation-packet sentinel.
+        self.sf_len = _require_uint8("slotframe", self.sf_len)
         #  Let's first compute the checksum
-        data = struct.pack('!BBHH' + str(len(self.payload)) + 's', self.payload_len,
-                           self.sf_len, self.seq, self.pkt_chksum, bytes(self.payload))
+        data = struct.pack('!BBHHH' + str(len(self.payload)) + 's', self.payload_len,
+                           self.sf_len, self.seq, self.cycle_seq,
+                           self.pkt_chksum, bytes(self.payload))
         self.pkt_chksum = sdn_ip_checksum(data, self.payload_len+SDN_SAH_LEN)
 
-        return struct.pack('!BBHH' + str(len(self.payload)) + 's', self.payload_len,
-                           self.sf_len, self.seq, self.pkt_chksum, bytes(self.payload))
+        return struct.pack('!BBHHH' + str(len(self.payload)) + 's', self.payload_len,
+                           self.sf_len, self.seq, self.cycle_seq,
+                           self.pkt_chksum, bytes(self.payload))
 
     def __repr__(self):
-        return "SA_Packet(payload_len={}, slotframe size={}, seq={}, pkt_chksum={}, payload={})".format(
-            hex(self.payload_len), self.sf_len, self.seq, hex(self.pkt_chksum), self.payload)
+        return "SA_Packet(payload_len={}, slotframe size={}, seq={}, cycle_seq={}, pkt_chksum={}, payload={})".format(
+            hex(self.payload_len), self.sf_len, self.seq, self.cycle_seq,
+            hex(self.pkt_chksum), self.payload)
 
 
 class Cell_Packet_Payload:
@@ -276,6 +297,9 @@ class Cell_Packet_Payload:
         self.payload = payload
 
     def pack(self):
+        self.channel = _require_uint8("channel", self.channel)
+        self.timeslot = _require_uint8("timeslot", self.timeslot)
+        self.padding = _require_uint8("padding", self.padding)
         if self.payload:
             packed = struct.pack('>bBBB2s2s'+str(len(self.payload)) +
                                  's', self.type, self.channel, self.timeslot,

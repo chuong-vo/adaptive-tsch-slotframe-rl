@@ -18,6 +18,7 @@
 # Default values
 DEFAULT_PROC_WINDOW = 200
 DEFAULT_STALL_TIMEOUT = 60.0
+DEFAULT_CONTROL_FLOOD_REPETITIONS = 1
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 1883
 DEFAULT_TSCH_MAX_CHANNEL = 3
@@ -27,6 +28,7 @@ DEFAULT_TSCH_MAX_SLOTFRAME = 500
 NAME = "name"
 PROCESSING_WINDOW = 'processing_window'
 STALL_TIMEOUT = 'stall_timeout'
+CONTROL_FLOOD_REPETITIONS = 'control_flood_repetitions'
 HOST = "host"
 PORT = 'port'
 TSCH = 'tsch'
@@ -49,7 +51,8 @@ class NETWORKConfig:
     def __init__(self,
                  name=None,
                  processing_window=DEFAULT_PROC_WINDOW,
-                 stall_timeout=DEFAULT_STALL_TIMEOUT
+                 stall_timeout=DEFAULT_STALL_TIMEOUT,
+                 control_flood_repetitions=DEFAULT_CONTROL_FLOOD_REPETITIONS,
                  ):
         """Initialize a :class:`.MQTTConfig` object.
 
@@ -69,6 +72,7 @@ class NETWORKConfig:
         self.name = name
         self.processing_window = processing_window
         self.stall_timeout = stall_timeout
+        self.control_flood_repetitions = control_flood_repetitions
 
     @classmethod
     def from_json(cls, json_object=None):
@@ -97,5 +101,8 @@ class NETWORKConfig:
             processing_window=json_object.get(
                 PROCESSING_WINDOW, DEFAULT_PROC_WINDOW),
             stall_timeout=json_object.get(
-                STALL_TIMEOUT, DEFAULT_STALL_TIMEOUT)
+                STALL_TIMEOUT, DEFAULT_STALL_TIMEOUT),
+            control_flood_repetitions=json_object.get(
+                CONTROL_FLOOD_REPETITIONS,
+                DEFAULT_CONTROL_FLOOD_REPETITIONS),
         )

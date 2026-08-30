@@ -79,6 +79,10 @@ void sdn_data_init(void);
 #if !(SDN_CONTROLLER || BUILD_WITH_SDN_CONTROLLER_SERIAL)
 /** \brief Reset data sequence number */
 void sdn_data_reset_seq(uint16_t new_cycle_seq);
+/** \brief Pause application traffic while a centralized schedule is staged. */
+void sdn_data_pause(void);
+/** \brief Resume application traffic after the schedule is applied. */
+void sdn_data_resume(void);
 #endif
 
 #if !(SDN_CONTROLLER || BUILD_WITH_SDN_CONTROLLER_SERIAL)

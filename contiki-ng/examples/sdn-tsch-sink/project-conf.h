@@ -45,20 +45,24 @@
 /* Set neighbour advertisement period */
 #define SDN_CONF_MAX_NA_INTERVAL 60
 /* Set the data packet period */
+#ifndef SDN_CONF_DATA_PACKET_INTERVAL
 #define SDN_CONF_DATA_PACKET_INTERVAL 40
+#endif
 /* Linkaddr size */
 #define LINKADDR_CONF_SIZE 2
+#define ORCHESTRA_CONF_CONTROL_PERIOD 821
+#define TSCH_SCHEDULE_CONF_MAX_LINKS 64
 #define IEEE_ADDR_CONF_ADDRESS \
     {                          \
         0x00, 0x12             \
     }
 /* Num of max routing routes */
-#define SDN_CONF_MAX_ROUTES 30
-#define NBR_TABLE_CONF_MAX_NEIGHBORS 10
+#define SDN_CONF_MAX_ROUTES 64
+#define NBR_TABLE_CONF_MAX_NEIGHBORS 64
 /* SDN STATISTICS? */
 #define SDN_STATISTICS 0
 /* Max number of neighbors in cache */
-#define SDN_DS_NBR_CONF_MAX_NEIGHBOR_CACHES 10
+#define SDN_DS_NBR_CONF_MAX_NEIGHBOR_CACHES 64
 #undef NETSTACK_CONF_NETWORK
 #define NETSTACK_CONF_NETWORK sdn_net_driver
 #undef NETSTACK_CONF_ROUTING
@@ -101,7 +105,9 @@
 #endif /* BUILD_WITH_SDN_ORCHESTRA_CENTRALIZED || BUILD_WITH_SDN_ORCHESTRA */
 
 #if BUILD_WITH_SDN_ORCHESTRA
+#ifndef ORCHESTRA_CONF_UNICAST_PERIOD
 #define ORCHESTRA_CONF_UNICAST_PERIOD 10 // This is the number of sensor nodes
+#endif
 #endif
 
 #if WITH_SECURITY

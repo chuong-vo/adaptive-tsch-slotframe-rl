@@ -42,27 +42,33 @@
 /*---------------------------------------------------------------------------*/
 /* Set neighbour discovery period */
 #define SDN_CONF_MAX_ND_INTERVAL 20
+/* Dataset topologies are static; retain the bootstrap parent until RA arrives. */
+#define SDN_CONF_FIXED_TOPOLOGY 1
 /* Set neighbour advertisement period */
 #define SDN_CONF_MAX_NA_INTERVAL 60
 /* Set the data packet period */
+#ifndef SDN_CONF_DATA_PACKET_INTERVAL
 #define SDN_CONF_DATA_PACKET_INTERVAL 40
+#endif
 /* Linkaddr size */
 #define LINKADDR_CONF_SIZE 2
+#define ORCHESTRA_CONF_CONTROL_PERIOD 821
+#define TSCH_SCHEDULE_CONF_MAX_LINKS 64
 #define IEEE_ADDR_CONF_ADDRESS \
     {                          \
         0x00, 0x12             \
     }
 /* Num of max routing routes */
 #if BUILD_WITH_SDN_ORCHESTRA_CENTRALIZED || BUILD_WITH_SDN_ORCHESTRA
-#define SDN_CONF_MAX_ROUTES 30
-#define NBR_TABLE_CONF_MAX_NEIGHBORS 10
+#define SDN_CONF_MAX_ROUTES 64
+#define NBR_TABLE_CONF_MAX_NEIGHBORS 64
 #else
 #define SDN_CONF_MAX_ROUTES 10
 #endif
 /* SDN STATISTICS? */
 #define SDN_STATISTICS 0
 /* Max number of neighbors in cache */
-#define SDN_DS_NBR_CONF_MAX_NEIGHBOR_CACHES 10
+#define SDN_DS_NBR_CONF_MAX_NEIGHBOR_CACHES 64
 #undef NETSTACK_CONF_NETWORK
 #define NETSTACK_CONF_NETWORK sdn_net_driver
 #undef NETSTACK_CONF_ROUTING
@@ -105,7 +111,9 @@
 #endif /* BUILD_WITH_SDN_ORCHESTRA_CENTRALIZED || BUILD_WITH_SDN_ORCHESTRA */
 
 #if BUILD_WITH_SDN_ORCHESTRA
+#ifndef ORCHESTRA_CONF_UNICAST_PERIOD
 #define ORCHESTRA_CONF_UNICAST_PERIOD 10 // This is the number of sensor nodes
+#endif
 #endif
 
 #if WITH_SECURITY
@@ -134,7 +142,8 @@
 /* Logging for the SDWSN netstack */
 #define LOG_CONF_LEVEL_SDWSN LOG_LEVEL_ERR
 #define LOG_CONF_LEVEL_NA LOG_LEVEL_ERR
-#define LOG_CONF_LEVEL_DATA LOG_LEVEL_ERR
+/* Expose source-side TX counters to Cooja's test log for exact PDR. */
+#define LOG_CONF_LEVEL_DATA LOG_LEVEL_INFO
 #define LOG_CONF_LEVEL_NBR_DS LOG_LEVEL_ERR
 #define LOG_CONF_LEVEL_ROUTE_DS LOG_LEVEL_ERR
 #define LOG_CONF_LEVEL_ND LOG_LEVEL_ERR

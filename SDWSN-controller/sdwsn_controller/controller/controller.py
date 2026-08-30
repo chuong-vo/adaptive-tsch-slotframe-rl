@@ -19,6 +19,7 @@ import logging
 
 import os
 import signal
+from pathlib import Path
 
 from rich.progress import Progress
 
@@ -65,22 +66,36 @@ class Controller(BaseController):
         self.__proc_output = None
 
         self.__contiki_source = config.contiki.source
-        self.__cooja_log = os.path.join(
-            self.__contiki_source, config.contiki.script_folder, 'COOJA.log')
-        self.__testlog = os.path.join(
-            self.__contiki_source, config.contiki.script_folder, 'COOJA.testlog')
-        self.__cooja_stdout_log = os.path.join(
-            self.__contiki_source, config.contiki.script_folder, 'COOJA.stdout.log')
         self.__simulation_folder = os.path.join(
             self.__contiki_source, config.contiki.script_folder)
+        configured_log_dir = getattr(config.contiki, "log_dir", None)
+        self.__log_dir = os.path.abspath(
+            configured_log_dir or self.__simulation_folder
+        )
+        os.makedirs(self.__log_dir, exist_ok=True)
+        self.__cooja_log = os.path.join(self.__log_dir, 'COOJA.log')
+        self.__testlog = os.path.join(self.__log_dir, 'COOJA.testlog')
+        self.__cooja_stdout_log = os.path.join(
+            self.__log_dir, 'COOJA.stdout.log')
         self.__cooja_path = os.path.normpath(
             os.path.join(self.__contiki_source, "tools", "cooja"))
-        self.__simulation_script = os.path.join(
-            self.__contiki_source, config.contiki.script_folder, config.contiki.simulation_script)
+        configured_script = Path(config.contiki.simulation_script)
+        if configured_script.is_absolute():
+            self.__simulation_script = str(configured_script)
+        else:
+            self.__simulation_script = os.path.join(
+                self.__simulation_folder,
+                str(configured_script),
+            )
 
         self.__new_simulation_script = None
 
         self.__port = config.contiki.port
+        self.__preserve_logs = getattr(config.contiki, "preserve_logs", False)
+        self.__startup_timeout = max(
+            1,
+            int(getattr(config.contiki, "startup_timeout", 300)),
+        )
 
         logger.info(f"Contiki source: {self.__contiki_source}")
         logger.info(f"Cooja log: {self.__cooja_log}")
@@ -88,6 +103,7 @@ class Controller(BaseController):
         logger.info(f"Cooja path: {self.__cooja_path}")
         logger.info(f"Simulation folder: {self.__simulation_folder}")
         logger.info(f"Simulation script: {self.__simulation_script}")
+        logger.info(f"Cooja runtime log folder: {self.__log_dir}")
 
         super().__init__(
             config
@@ -104,6 +120,25 @@ class Controller(BaseController):
                 return "".join(f.readlines()[-lines:])
         except OSError:
             return ""
+
+    @property
+    def cooja_log_path(self):
+        return self.__cooja_log
+
+    @property
+    def cooja_testlog_path(self):
+        return self.__testlog
+
+    @property
+    def cooja_stdout_log_path(self):
+        return self.__cooja_stdout_log
+
+    @property
+    def simulation_script_path(self):
+        return self.__simulation_script
+
+    def cooja_is_running(self):
+        return self.__proc is not None and self.__proc.poll() is None
 
     def start_cooja(self):
         # cleanup
@@ -131,27 +166,35 @@ class Controller(BaseController):
         # We need to overwrite the port of the serial socket in the
         # csc simulation file
         with open(self.__simulation_script, "r") as input_file:
-            self.__new_simulation_script = self.__simulation_script.split('.')
-            self.__new_simulation_script = "".join(
-                [self.__new_simulation_script[0], "-temp.csc"])
+            simulation_path = Path(self.__simulation_script)
+            self.__new_simulation_script = str(
+                simulation_path.with_name(
+                    f"{simulation_path.stem}-port-{self.__port}.csc"
+                )
+            )
             filedata = input_file.read()
             # Replace the target string
             filedata = filedata.replace(str(60001), str(self.__port))
             with open(self.__new_simulation_script, "w") as new_tmp_file:
                 new_tmp_file.write(filedata)
 
-        args = " ".join(["cd", self.__cooja_path, "&&", "exec ./gradlew run --args='-nogui=" +
-                         self.__new_simulation_script, "-contiki=" + self.__contiki_source+" -logdir=" +
-                         self.__simulation_folder+" -logname=COOJA"+"'"])
+        cooja_args = " ".join([
+            f"-nogui={self.__new_simulation_script}",
+            f"-contiki={self.__contiki_source}",
+            f"-logdir={self.__log_dir}",
+            "-logname=COOJA",
+        ])
+        args = ["./gradlew", "run", f"--args={cooja_args}"]
 
         self.__proc_output = open(self.__cooja_stdout_log, "w")
         self.__proc = Popen(args, stdout=self.__proc_output, stderr=STDOUT,
-                            shell=True, universal_newlines=True, preexec_fn=os.setsid)
+                            cwd=self.__cooja_path, universal_newlines=True,
+                            start_new_session=True)
 
         status = 0
         with Progress(transient=True) as progress:
             task1 = progress.add_task(
-                "[red]Waiting for Cooja to start...", total=300)
+                "[red]Waiting for Cooja to start...", total=self.__startup_timeout)
 
             while not progress.finished:
                 progress.update(task1, advance=1)
@@ -159,7 +202,7 @@ class Controller(BaseController):
                     break
                 if os.access(self.__cooja_log, os.R_OK):
                     status = 1
-                    progress.update(task1, completed=300)
+                    progress.update(task1, completed=self.__startup_timeout)
                 sleep(1)
 
         if status == 0:
@@ -196,7 +239,7 @@ class Controller(BaseController):
         status = 0
         with Progress(transient=True) as progress:
             task1 = progress.add_task(
-                "[red]Setting up Cooja simulation...", total=300)
+                "[red]Setting up Cooja simulation...", total=self.__startup_timeout)
             while not progress.finished:
                 progress.update(task1, advance=1)
                 if self.__proc.poll() is not None:
@@ -215,7 +258,7 @@ class Controller(BaseController):
                     )
                 if cooja_socket_active:
                     status = 1
-                    progress.update(task1, completed=300)
+                    progress.update(task1, completed=self.__startup_timeout)
 
                 sleep(1)
 
@@ -251,11 +294,11 @@ class Controller(BaseController):
         if self.__new_simulation_script is not None:
             if os.path.exists(self.__new_simulation_script):
                 os.remove(self.__new_simulation_script)
-        # Delete COOJA.log and COOJA.testlog
-        if os.path.exists(self.__cooja_log):
-            os.remove(self.__cooja_log)
-        if os.path.exists(self.__testlog):
-            os.remove(self.__testlog)
+        if not self.__preserve_logs:
+            if os.path.exists(self.__cooja_log):
+                os.remove(self.__cooja_log)
+            if os.path.exists(self.__testlog):
+                os.remove(self.__testlog)
         super().stop()
 
     def reset(self):

@@ -40,12 +40,18 @@ def log_table(rich_table):
 """ Build SA control packet """
 
 
-def tsch_build_pkt(payloadPacked, sf_len, seq):
-    logger.debug(f'Building TSCH packet with SF len {sf_len} and seq {seq}')
+def tsch_build_pkt(payloadPacked, sf_len, seq, cycle_seq=None):
+    if cycle_seq is None:
+        cycle_seq = seq
+    logger.debug(
+        f'Building TSCH packet with SF len {sf_len}, control seq {seq}, '
+        f'and cycle seq {cycle_seq}'
+    )
     payload_len = len(payloadPacked)
     # Build schedule packet header
     cell_pkt = Cell_Packet(
-        payloadPacked, payload_len=payload_len, sf_len=sf_len, seq=seq)
+        payloadPacked, payload_len=payload_len, sf_len=sf_len, seq=seq,
+        cycle_seq=cycle_seq)
     # Pack
     cell_packed = cell_pkt.pack()
     logger.debug(repr(cell_pkt))

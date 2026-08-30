@@ -209,9 +209,13 @@ class BaseController(ABC):
         if self.tsch_scheduler:
             return self.network.tsch_sendall()
 
-    def compute_tsch_schedule(self, path, current_sf_size):
+    def send_tsch_cycle_marker(self):
         if self.tsch_scheduler:
-            self.tsch_scheduler.run(path, current_sf_size)
+            return self.network.send_tsch_cycle_marker()
+
+    def compute_tsch_schedule(self, path, current_sf_size, **kwargs):
+        if self.tsch_scheduler:
+            return self.tsch_scheduler.run(path, current_sf_size, **kwargs)
 
     @ property
     def last_tsch_link(self):

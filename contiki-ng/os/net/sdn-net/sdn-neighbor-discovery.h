@@ -87,6 +87,9 @@ void sdn_nd_init(void);
 /** \brief Periodic processing of data structures */
 void sdn_nd_periodic(void);
 
+/** \brief Freeze discovery after the controller installs fixed routes. */
+void sdn_nd_pause(void);
+
 /**
  * \brief Handle an incoming ND message
 

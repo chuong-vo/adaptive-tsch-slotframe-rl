@@ -71,6 +71,7 @@ int sdn_ra_input(void)
         LOG_WARN("pkt already processed, dropping\n");
         return 0;
     }
+    sdn_nd_pause();
     // Update sequence number received
     sequence_number = seq + 1;
     // Process schedules

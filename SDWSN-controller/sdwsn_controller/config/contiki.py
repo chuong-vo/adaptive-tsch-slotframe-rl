@@ -21,12 +21,16 @@ import os
 DEFAULT_SCRIPT_FOLDER = "examples/elise"
 DEFAULT_SIM_SCRIPT = "cooja-orchestra.csc"
 DEFAULT_PORT = 60001
+DEFAULT_STARTUP_TIMEOUT = 300
 
 # Keys in the JSON configuration file
 SCRIPT_FOLDER = "script_folder"
 SOURCE = "source"
 SIMULATION_SCRIPT = "simulation_script"
 PORT = "port"
+LOG_DIR = "log_dir"
+PRESERVE_LOGS = "preserve_logs"
+STARTUP_TIMEOUT = "startup_timeout"
 
 
 class CONTIKIConfig:
@@ -41,7 +45,8 @@ class CONTIKIConfig:
     """
 
     def __init__(self, script_folder=None, source=None,
-                 simulation_script=None, port=None):
+                 simulation_script=None, port=None, log_dir=None,
+                 preserve_logs=False, startup_timeout=DEFAULT_STARTUP_TIMEOUT):
         """Initialize a :class:`.MQTTAuthConfig` object.
 
         Args:
@@ -56,6 +61,9 @@ class CONTIKIConfig:
         self.source = source
         self.simulation_script = simulation_script
         self.port = port
+        self.log_dir = log_dir
+        self.preserve_logs = bool(preserve_logs)
+        self.startup_timeout = int(startup_timeout)
 
     @classmethod
     def from_json(cls, json_object=None):
@@ -90,8 +98,16 @@ class CONTIKIConfig:
         # Expand env/user in provided values
         script_folder = json_object.get(SCRIPT_FOLDER, DEFAULT_SCRIPT_FOLDER)
         source = _expand(json_object.get(SOURCE))
-        simulation_script = json_object.get(SIMULATION_SCRIPT, DEFAULT_SIM_SCRIPT)
+        simulation_script = _expand(
+            json_object.get(SIMULATION_SCRIPT, DEFAULT_SIM_SCRIPT)
+        )
         port = json_object.get(PORT, DEFAULT_PORT)
+        log_dir = _expand(json_object.get(LOG_DIR))
+        preserve_logs = json_object.get(PRESERVE_LOGS, False)
+        startup_timeout = json_object.get(
+            STARTUP_TIMEOUT,
+            DEFAULT_STARTUP_TIMEOUT,
+        )
 
         # Fallbacks for Contiki source
         if not source or (isinstance(source, str) and len(source.strip()) == 0):
@@ -113,4 +129,7 @@ class CONTIKIConfig:
         return cls(script_folder=script_folder,
                    source=source,
                    simulation_script=simulation_script,
-                   port=port)
+                   port=port,
+                   log_dir=log_dir,
+                   preserve_logs=preserve_logs,
+                   startup_timeout=startup_timeout)
