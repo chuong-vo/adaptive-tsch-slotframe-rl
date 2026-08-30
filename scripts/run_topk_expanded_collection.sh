@@ -5,6 +5,7 @@ set -u
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PYTHON_BIN=${PYTHON_BIN:-python3}
 OUTPUT=${TOPK_EXPANDED_OUTPUT:-$REPO/runs/topk_dataset/expanded}
+CONFIG=${TOPK_EXPANDED_CONFIG:-$REPO/experiments/topk_dataset/config/expanded.json}
 LOG=${TOPK_EXPANDED_LOG:-$REPO/runs/topk_dataset/expanded_full.log}
 PID_FILE=${TOPK_EXPANDED_PID_FILE:-$REPO/runs/topk_dataset/expanded_full.pid}
 LOCK_FILE=${TOPK_EXPANDED_LOCK_FILE:-$REPO/runs/topk_dataset/expanded_full.lock}
@@ -61,6 +62,7 @@ while (( restart_count <= MAX_RESTARTS )); do
         "$(date --iso-8601=seconds)" "$restart_count" >> "$LOG"
 
     "$PYTHON_BIN" -m experiments.topk_dataset.collect_expanded \
+        --config "$CONFIG" \
         --output "$OUTPUT" >> "$LOG" 2>&1 &
     collector_pid=$!
     wait "$collector_pid"

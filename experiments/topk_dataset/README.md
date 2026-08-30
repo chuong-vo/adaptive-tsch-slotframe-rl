@@ -82,6 +82,14 @@ seed-context from the beginning after a process failure:
 nohup scripts/run_topk_expanded_collection.sh >/dev/null 2>&1 &
 ```
 
+When resuming a relocated collection, point the supervisor at the frozen
+snapshot instead of resolving paths from the current default configuration:
+
+```bash
+TOPK_EXPANDED_CONFIG="$PWD/runs/topk_dataset/expanded/config_snapshot.json" \
+  nohup scripts/run_topk_expanded_collection.sh >/dev/null 2>&1 &
+```
+
 An existing output directory is accepted only when its manifest and execution
 plan exactly match the current command. Smoke, pilot, and full outputs therefore
 cannot be mixed accidentally.
